@@ -1,0 +1,45 @@
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+
+# Editor and operating-system files
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*~
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.venv/
+venv/
+
+# JVM / Flink
+*.class
+*.jar
+target/
+.gradle/
+build/
+
+# Node / dbt
+node_modules/
+dbt_packages/
+logs/
+
+# Runtime state and generated artifacts
+data/
+tmp/
+.cache/
+coverage/
+htmlcov/
+*.log
+
+# Local containers and credentials
+infra/docker/volumes/
+*.pem
+*.key
+*.crt

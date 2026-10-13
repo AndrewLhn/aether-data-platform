@@ -89,7 +89,7 @@ Empty directories are intentional placeholders for the next implementation phase
 No runtime stack is released yet. To review the design locally:
 
 ```bash
-git clone https://github.com/<your-account>/aether-data-platform.git
+git clone https://github.com/AndrewLhn/aether-data-platform.git
 cd aether-data-platform
 cp .env.example .env
 ```

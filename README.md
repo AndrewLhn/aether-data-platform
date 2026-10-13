@@ -86,7 +86,7 @@ Empty directories are intentional placeholders for the next implementation phase
 
 ## Getting started
 
-No runtime stack is released yet. To review the design locally:
+The local development stack provides PostgreSQL, Kafka, Kafka Connect, and MinIO for the first infrastructure phase. To run it:
 
 ```bash
 git clone https://github.com/AndrewLhn/aether-data-platform.git
@@ -94,13 +94,14 @@ cd aether-data-platform
 cp .env.example .env
 ```
 
-`.env` is only a future local-development configuration file; it must not contain production credentials and is ignored by Git. Follow the phase plan in the project documentation before attempting to run services.
+Start the local infrastructure and verify its services with the [local development guide](docs/local-development.md). `.env` contains local-only values, must never contain production credentials, and is ignored by Git.
 
 ## Design documents
 
 - [Use cases](docs/use-cases.md)
 - [Functional and non-functional requirements](docs/requirements.md)
 - [Architecture](docs/architecture.md)
+- [Local development](docs/local-development.md)
 - [ADR index](docs/adr/README.md)
 
 ## Delivery principles

@@ -1,0 +1,22 @@
+{
+  "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+  "tasks.max": "1",
+  "database.hostname": "postgres",
+  "database.port": "5432",
+  "database.user": "debezium",
+  "database.password": "${env:DEBEZIUM_PASSWORD}",
+  "database.dbname": "aether",
+  "plugin.name": "pgoutput",
+  "slot.name": "aether_cdc_slot",
+  "publication.name": "aether_cdc_publication",
+  "publication.autocreate.mode": "disabled",
+  "topic.prefix": "aether",
+  "schema.include.list": "public",
+  "table.include.list": "public.customers,public.orders,public.payments,public.inventory",
+  "snapshot.mode": "initial",
+  "tombstones.on.delete": "false",
+  "schema.history.internal.kafka.bootstrap.servers": "kafka:19092",
+  "schema.history.internal.kafka.topic": "aether.schema-history",
+  "topic.creation.default.replication.factor": "1",
+  "topic.creation.default.partitions": "1"
+}

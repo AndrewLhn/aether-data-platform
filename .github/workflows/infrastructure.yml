@@ -1,0 +1,40 @@
+name: Infrastructure
+
+on:
+  pull_request:
+    paths:
+      - ".env.example"
+      - "infra/docker/**"
+      - "scripts/**"
+      - ".github/workflows/infrastructure.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - ".env.example"
+      - "infra/docker/**"
+      - "scripts/**"
+      - ".github/workflows/infrastructure.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Static configuration checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Validate shell syntax
+        run: |
+          bash -n scripts/register-ecommerce-cdc.sh
+          bash -n scripts/verify-ecommerce-cdc.sh
+          sh -n infra/docker/postgres/init/01-create-debezium-user.sh
+      - name: Validate connector JSON
+        run: |
+          node -e 'JSON.parse(require("fs").readFileSync("infra/docker/connectors/aether-postgres-cdc.json", "utf8"))'
+      - name: Validate Docker Compose
+        run: docker compose --env-file .env.example -f infra/docker/docker-compose.yml config --quiet

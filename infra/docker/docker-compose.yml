@@ -87,6 +87,10 @@ services:
       OFFSET_FLUSH_INTERVAL_MS: 10000
       REST_HOST_NAME: 0.0.0.0
       REST_ADVERTISED_HOST_NAME: connect
+      CONNECT_TOPIC_CREATION_ENABLE: "true"
+      CONNECT_CONFIG_PROVIDERS: env
+      CONNECT_CONFIG_PROVIDERS_ENV_CLASS: org.apache.kafka.common.config.provider.EnvVarConfigProvider
+      DEBEZIUM_PASSWORD: ${DEBEZIUM_PASSWORD:?DEBEZIUM_PASSWORD must be set}
     ports:
       - "${KAFKA_CONNECT_PORT:-8083}:8083"
     depends_on:

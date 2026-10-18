@@ -2,11 +2,11 @@
 
 ## Purpose and scope
 
-The local stack provides the infrastructure baseline for Aether's first end-to-end CDC slice:
+The local stack provides the infrastructure baseline and first end-to-end CDC slice for Aether:
 
 - PostgreSQL 17 configured for logical replication;
 - Apache Kafka in single-node KRaft combined mode, with no ZooKeeper;
-- Kafka Connect with the Debezium PostgreSQL connector already installed;
+- Kafka Connect with the Debezium PostgreSQL connector installed;
 - MinIO as S3-compatible object storage for the future Iceberg lakehouse.
 
 This is a single-machine development environment. It intentionally uses plaintext Kafka, unauthenticated Kafka Connect, one Kafka broker, and local development credentials. It is not a production deployment.
@@ -27,7 +27,7 @@ docker compose --env-file .env -f infra/docker/docker-compose.yml up -d
 docker compose --env-file .env -f infra/docker/docker-compose.yml ps
 ```
 
-Wait until PostgreSQL, Kafka, Kafka Connect, and MinIO all report `healthy`. The first start downloads images and initializes named volumes.
+Wait until PostgreSQL, Kafka, Kafka Connect, and MinIO all report `healthy`. The first start downloads images, initializes named volumes, and creates the e-commerce schema with seed data.
 
 ## Local endpoints
 
@@ -56,11 +56,45 @@ curl --fail http://localhost:9000/minio/health/live
 
 The PostgreSQL command must return `logical`. An empty Kafka topic list and an empty JSON array from Kafka Connect are expected before the ingestion phase registers the first connector.
 
-## Debezium readiness
+## E-commerce source schema
 
-PostgreSQL starts with `wal_level=logical`, `max_wal_senders=10`, and `max_replication_slots=10`. Its initialization script creates the dedicated `debezium` role with replication and read permissions. The next ingestion phase will add e-commerce tables and register a PostgreSQL connector through Kafka Connect's REST API.
+PostgreSQL starts with `wal_level=logical`, `max_wal_senders=10`, and `max_replication_slots=10`. Its initialization scripts create a dedicated `debezium` role with replication and read permissions, then create these CDC source tables:
 
-Kafka Connect persists connector configurations, offsets, and statuses in the three `aether.connect.*` internal topics. Broker-side automatic topic creation is disabled; Kafka Connect creates only its configured internal topics.
+- `customers`
+- `orders`
+- `payments`
+- `inventory`
+
+The initial fixture contains two customers, two orders, one payment, and two inventory records. It is synthetic data only.
+
+The schema also creates `aether_cdc_publication` for precisely these tables. The connector uses this existing publication instead of granting it broad DDL or publication-management privileges.
+
+## Run and verify PostgreSQL CDC
+
+Register the versioned connector configuration:
+
+```bash
+./scripts/register-ecommerce-cdc.sh
+curl --fail http://localhost:8083/connectors/aether-postgres-cdc/status
+```
+
+Run the repeatable end-to-end verification:
+
+```bash
+./scripts/verify-ecommerce-cdc.sh
+```
+
+The verification starts the stack if needed, registers the connector idempotently, waits for its task to become `RUNNING`, starts a Kafka consumer at the latest offset, and inserts a new `orders` row. It passes only when the consumer output contains that row's unique `external_order_reference` in `aether.public.orders`.
+
+An expected successful final line has this form:
+
+```text
+CDC verification passed: cdc-verification-20261018T120000Z was emitted to aether.public.orders.
+```
+
+The timestamp changes on every execution. The script intentionally leaves the inserted test order in PostgreSQL so the event trail remains inspectable.
+
+Kafka Connect persists connector configurations, offsets, and statuses in the three `aether.connect.*` internal topics. Broker-side automatic topic creation is disabled; the connector defines its own one-partition, replication-factor-one topic-creation policy for this local single-broker environment.
 
 ## Stop and reset
 

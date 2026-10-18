@@ -47,6 +47,8 @@ The solid path is the **data plane**. The dashed path is the **control plane**: 
 - **Reconciliation** — compare source, Kafka, and Iceberg counts/keys to expose missing, duplicated, or late data.
 - **Schema evolution** — validate producer changes against versioned contracts before they silently corrupt downstream datasets.
 
+The first working vertical slice captures e-commerce PostgreSQL changes into Kafka through Debezium. Run `./scripts/verify-ecommerce-cdc.sh` after following the [local development guide](docs/local-development.md) to prove the flow end to end with a newly inserted order.
+
 Detailed acceptance scenarios are in [docs/use-cases.md](docs/use-cases.md).
 
 ## Technology choices
@@ -78,6 +80,7 @@ The rationale for the foundational choices is recorded in [ADRs](docs/adr/).
 │   └── recovery/         # Recovery Engine control-plane service
 ├── dbt/models/           # Analytics transformations and tests
 ├── orchestration/        # Airflow DAGs and deployment configuration
+├── scripts/              # Repeatable local setup and verification commands
 ├── tests/docs/           # Documentation-specific test fixtures or checks
 └── .github/workflows/    # CI quality gates
 ```

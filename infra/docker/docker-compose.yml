@@ -1,5 +1,45 @@
 name: ${COMPOSE_PROJECT_NAME:-aether}
 
+# ---------------------------------------------------------------------------
+# Shared Flink runtime configuration.
+#
+# FLINK_PROPERTIES is consumed by the official image entrypoint, which splits
+# every line on the first ':' and runs envsubst over the value. That is how
+# credentials reach Flink without being written into SQL or into the image.
+#
+# The S3 keys are duplicated deliberately:
+#   s3.access-key / s3.secret-key            -> flink-s3-fs-hadoop plugin, used
+#                                               for checkpoints and savepoints
+#   s3.access-key-id / s3.secret-access-key  -> Iceberg S3FileIO, used for the
+#                                               warehouse
+# They are different configuration namespaces with different key names.
+# ---------------------------------------------------------------------------
+x-flink-environment: &flink-environment
+  FLINK_PROPERTIES: |
+    jobmanager.rpc.address: flink-jobmanager
+    jobmanager.rpc.port: 6123
+    taskmanager.numberOfTaskSlots: ${FLINK_TASK_SLOTS:-2}
+    parallelism.default: 1
+    state.backend.type: rocksdb
+    state.checkpoints.dir: s3://${S3_CHECKPOINT_BUCKET:-aether-flink}/checkpoints
+    state.savepoints.dir: s3://${S3_CHECKPOINT_BUCKET:-aether-flink}/savepoints
+    execution.checkpointing.interval: ${CHECKPOINT_INTERVAL_SECONDS:-30}s
+    execution.checkpointing.mode: EXACTLY_ONCE
+    execution.checkpointing.min-pause: 5s
+    execution.checkpointing.timeout: 10min
+    s3.endpoint: ${S3_ENDPOINT_INTERNAL:-http://seaweedfs:8333}
+    s3.path.style.access: true
+    s3.access-key: ${S3_ACCESS_KEY_ID:?S3_ACCESS_KEY_ID must be set}
+    s3.secret-key: ${S3_SECRET_ACCESS_KEY:?S3_SECRET_ACCESS_KEY must be set}
+  # Passed straight through to the Iceberg S3FileIO options rendered into the
+  # pipeline SQL by services/streaming/docker/aether-entrypoint.sh.
+  S3_ENDPOINT_INTERNAL: ${S3_ENDPOINT_INTERNAL:-http://seaweedfs:8333}
+  S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:?S3_ACCESS_KEY_ID must be set}
+  S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:?S3_SECRET_ACCESS_KEY must be set}
+  S3_REGION: ${S3_REGION:-us-east-1}
+  S3_WAREHOUSE_BUCKET: ${S3_WAREHOUSE_BUCKET:-aether-lakehouse}
+  KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS_INTERNAL:-kafka:19092}
+
 services:
   postgres:
     image: postgres:17.11-alpine3.24
@@ -72,7 +112,7 @@ services:
   connect:
     image: quay.io/debezium/connect:3.7
     environment:
-      BOOTSTRAP_SERVERS: kafka:19092
+      BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS_INTERNAL:-kafka:19092}
       GROUP_ID: aether-connect
       CONFIG_STORAGE_TOPIC: aether.connect.configs
       OFFSET_STORAGE_TOPIC: aether.connect.offsets
@@ -99,77 +139,150 @@ services:
       postgres:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "bash -ec '>/dev/tcp/localhost/8083'"]
+      # Probe the REST API rather than the TCP port: an open socket with a
+      # failed worker would otherwise report healthy and break every dependent
+      # wait condition.
+      test: ["CMD-SHELL", "curl --fail --silent --show-error http://localhost:8083/ >/dev/null"]
       interval: 10s
       timeout: 5s
-      retries: 12
+      retries: 18
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - aether
+
+  # S3-compatible object store for the Iceberg warehouse and Flink checkpoints.
+  # MinIO Community Edition was archived upstream on 2026-02-13 and its image
+  # is no longer published, so the local stack uses SeaweedFS instead. Both
+  # Flink and Iceberg only ever see an S3 endpoint, so the store stays swappable
+  # through S3_ENDPOINT_INTERNAL.
+  seaweedfs:
+    image: chrislusf/seaweedfs:4.50
+    command: server -dir=/data -s3 -s3.port=8333
+    environment:
+      AWS_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:?S3_ACCESS_KEY_ID must be set}
+      AWS_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:?S3_SECRET_ACCESS_KEY must be set}
+    ports:
+      - "${S3_PORT:-8333}:8333"
+    volumes:
+      - seaweedfs-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "echo 'cluster.status' | weed shell -master=localhost:9333 >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 18
       start_period: 20s
     restart: unless-stopped
     networks:
       - aether
 
-  localstack:
-    image: localstack/localstack:latest
-    ports:
-      - "4566:4566"
-      - "4510-4559:4510-4559"
+  # Buckets are not created implicitly by the SeaweedFS S3 gateway, and Iceberg
+  # will not create the warehouse bucket either. This one-shot container makes
+  # the dependency explicit and idempotent so `up` is safe to re-run.
+  seaweedfs-init:
+    image: chrislusf/seaweedfs:4.50
+    depends_on:
+      seaweedfs:
+        condition: service_healthy
     environment:
-      - SERVICES=s3
-      - DEBUG=1
-      - LOCALSTACK_AUTH_TOKEN=dummy
-    volumes:
-      - "/var/run/docker.sock:/var/run/docker.sock"
-      - localstack-data:/var/lib/localstack
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 12
-      start_period: 20s
-    restart: unless-stopped
+      S3_WAREHOUSE_BUCKET: ${S3_WAREHOUSE_BUCKET:-aether-lakehouse}
+      S3_CHECKPOINT_BUCKET: ${S3_CHECKPOINT_BUCKET:-aether-flink}
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -e
+        for bucket in "$$S3_WAREHOUSE_BUCKET" "$$S3_CHECKPOINT_BUCKET"; do
+          until echo 's3.bucket.list' | weed shell -master=seaweedfs:9333 2>/dev/null | grep -qw "$$bucket" \
+             || echo "s3.bucket.create -name $$bucket" | weed shell -master=seaweedfs:9333 2>/dev/null | grep -q 'created bucket'; do
+            echo "waiting to create bucket $$bucket..."
+            sleep 2
+          done
+          echo "bucket $$bucket is ready"
+        done
+    restart: "no"
     networks:
       - aether
 
   flink-jobmanager:
-    build: /Users/andrejzivitko/aether-data-platform/services/streaming
-    ports:
-      - "8081:8081"
+    build:
+      context: ../../services/streaming
+      dockerfile: Dockerfile
+    image: aether/flink:local
+    entrypoint: ["/opt/flink/aether/aether-entrypoint.sh"]
     command: jobmanager
     environment:
-      - |
-        FLINK_PROPERTIES=
-        jobmanager.rpc.address: flink-jobmanager
-        jobmanager.rpc.port: 6123
-        taskmanager.numberOfTaskSlots: 2
-        state.backend: rocksdb
-        state.checkpoints.dir: s3://flink/checkpoints
-        state.savepoints.dir: s3://flink/savepoints
+      <<: *flink-environment
+    ports:
+      - "${FLINK_UI_PORT:-8081}:8081"
+    depends_on:
+      seaweedfs-init:
+        condition: service_completed_successfully
+    volumes:
+      # Never mount over /opt/flink/lib: that would shadow the JARs shipped in
+      # the base image. usrlib is the directory Flink adds to the user-code
+      # classloader, which is where connector factories are discovered.
+      - ./flink/lib:/opt/flink/usrlib:ro
+      - ../../services/streaming/sql:/opt/flink/sql-src:ro
+      - ../../services/streaming/docker:/opt/flink/aether:ro
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:8081"]
       interval: 10s
       timeout: 5s
-      retries: 12
-      start_period: 20s
+      retries: 18
+      start_period: 30s
     restart: unless-stopped
-    volumes:
-      - /Users/andrejzivitko/aether-data-platform/services/streaming/pipeline.py:/opt/flink/pipeline.py
-      - /Users/andrejzivitko/aether-data-platform/infra/docker/libs:/opt/flink/plugins/libs
     networks:
       - aether
 
   flink-taskmanager:
-    build: /Users/andrejzivitko/aether-data-platform/services/streaming
+    image: aether/flink:local
+    entrypoint: ["/opt/flink/aether/aether-entrypoint.sh"]
+    command: taskmanager
+    environment:
+      <<: *flink-environment
     depends_on:
       flink-jobmanager:
         condition: service_healthy
-    command: taskmanager
-    environment:
-      - |
-        FLINK_PROPERTIES=
-        jobmanager.rpc.address: flink-jobmanager
-        jobmanager.rpc.port: 6123
-        taskmanager.numberOfTaskSlots: 2
+    volumes:
+      # Never mount over /opt/flink/lib: that would shadow the JARs shipped in
+      # the base image. usrlib is the directory Flink adds to the user-code
+      # classloader, which is where connector factories are discovered.
+      - ./flink/lib:/opt/flink/usrlib:ro
+      - ../../services/streaming/sql:/opt/flink/sql-src:ro
+      - ../../services/streaming/docker:/opt/flink/aether:ro
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c '>/dev/tcp/flink-jobmanager/6123'"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 30s
     restart: unless-stopped
+    networks:
+      - aether
+
+  # Submits the streaming job to the session cluster. Kept separate from the
+  # JobManager so a failing job is visible as a failed one-shot container
+  # instead of a crash-looping cluster, and so `make pipeline` can resubmit
+  # without restarting Flink.
+  pipeline-submit:
+    image: aether/flink:local
+    depends_on:
+      flink-jobmanager:
+        condition: service_healthy
+      flink-taskmanager:
+        condition: service_started
+    environment:
+      <<: *flink-environment
+    entrypoint: ["/opt/flink/aether/submit-pipeline.sh"]
+    volumes:
+      # Never mount over /opt/flink/lib: that would shadow the JARs shipped in
+      # the base image. usrlib is the directory Flink adds to the user-code
+      # classloader, which is where connector factories are discovered.
+      - ./flink/lib:/opt/flink/usrlib:ro
+      - ../../services/streaming/sql:/opt/flink/sql-src:ro
+      - ../../services/streaming/docker:/opt/flink/aether:ro
+    restart: "no"
     networks:
       - aether
 
@@ -180,4 +293,4 @@ networks:
 volumes:
   postgres-data:
   kafka-data:
-  localstack-data:
+  seaweedfs-data:

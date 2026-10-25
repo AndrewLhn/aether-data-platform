@@ -43,3 +43,8 @@ infra/docker/volumes/
 *.pem
 *.key
 *.crt
+
+# Downloaded Flink libraries (resolved by scripts/download-flink-libs.sh
+# from infra/docker/flink/libs.lock). Digests are committed, binaries are not.
+infra/docker/flink/lib/
+infra/docker/flink/plugins/

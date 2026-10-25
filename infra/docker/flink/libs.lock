@@ -20,4 +20,4 @@
 
 114c42c9200794269e2decc2b8f4c6865924bb08b78e312c7c569ad9ec89947a5489b4404b99735911fe88d29e283854c41bb0cbda03d85d88a3fc6f72ba0879  lib/iceberg-flink-runtime-1.20-1.12.0.jar  https://repo1.maven.org/maven2/org/apache/iceberg/iceberg-flink-runtime-1.20/1.12.0/iceberg-flink-runtime-1.20-1.12.0.jar
 b01456f80142c8837004e31329a0f40db8a9d44917a4a694cb7d8d6d3a68cb20c61e6f7788fa1bdcb95c0edf724322b49667d6f9ef60fc9cc46da5c24ce5c7de  lib/iceberg-aws-bundle-1.12.0.jar  https://repo1.maven.org/maven2/org/apache/iceberg/iceberg-aws-bundle/1.12.0/iceberg-aws-bundle-1.12.0.jar
-0b744f0f3c418a45cf23ac72d477f5f8ee73f8f96a5b733b21a953a0207facd52c5495383eaad2416dbffc17e9fa5b53b3cc49e70c3cb7a2ead38a7ecac0211df  lib/flink-sql-connector-kafka-3.4.0-1.20.jar  https://repo1.maven.org/maven2/org/apache/flink/flink-sql-connector-kafka/3.4.0-1.20/flink-sql-connector-kafka-3.4.0-1.20.jar
+b744f0f3c418a45cf23ac72d477f5f8ee73f8f96a5b733b21a953a0207facd52c5495383eaad2416dbffc17e9fa5b53b3cc49e70c3cb7a2ead38a7ecac0211df  lib/flink-sql-connector-kafka-3.4.0-1.20.jar  https://repo1.maven.org/maven2/org/apache/flink/flink-sql-connector-kafka/3.4.0-1.20/flink-sql-connector-kafka-3.4.0-1.20.jar

@@ -1,0 +1,103 @@
+-- Aether streaming pipeline: Kafka (Debezium CDC) -> Iceberg.
+--
+-- Executed by Flink SQL Client. This file is a template: the placeholders
+-- below are substituted at container start by
+-- services/streaming/docker/aether-entrypoint.sh, which keeps credentials out
+-- of version control. Never write literal secrets into this file.
+--
+-- Placeholders: ${KAFKA_BOOTSTRAP_SERVERS}, ${S3_ENDPOINT_INTERNAL},
+--               ${S3_ACCESS_KEY_ID}, ${S3_SECRET_ACCESS_KEY}, ${S3_REGION},
+--               ${S3_WAREHOUSE_BUCKET}
+
+-- ---------------------------------------------------------------------------
+-- Session configuration
+-- ---------------------------------------------------------------------------
+SET 'execution.runtime-mode' = 'streaming';
+
+-- Iceberg commits a snapshot on checkpoint. Without checkpointing the writer
+-- buffers forever and nothing becomes visible downstream, so the interval is
+-- set here as well as in FLINK_PROPERTIES: `sql-client -f` is a new session and
+-- does not inherit cluster configuration for execution options.
+SET 'execution.checkpointing.interval' = '30s';
+SET 'execution.checkpointing.mode' = 'EXACTLY_ONCE';
+
+-- Equality deletes, which `upsert-enabled` relies on, require table format
+-- version 2. Stated explicitly so the contract does not depend on the default
+-- of whichever Iceberg version happens to be on the classpath.
+SET 'write.format-version' = '2';
+
+-- ---------------------------------------------------------------------------
+-- Iceberg catalog
+-- ---------------------------------------------------------------------------
+CREATE CATALOG aether_catalog WITH (
+  'type'                 = 'iceberg',
+  'catalog-type'         = 'hadoop',
+  'warehouse'            = 's3://${S3_WAREHOUSE_BUCKET}/warehouse',
+  'io-impl'              = 'org.apache.iceberg.aws.s3.S3FileIO',
+  's3.endpoint'          = '${S3_ENDPOINT_INTERNAL}',
+  's3.access-key-id'     = '${S3_ACCESS_KEY_ID}',
+  's3.secret-access-key' = '${S3_SECRET_ACCESS_KEY}',
+  's3.path-style-access' = 'true',
+  'client.region'        = '${S3_REGION}'
+);
+
+CREATE DATABASE IF NOT EXISTS aether_catalog.ecommerce;
+
+-- ---------------------------------------------------------------------------
+-- Source: Debezium change events for public.orders
+--
+-- debezium-json turns the CDC envelope into a changelog stream
+-- (+I / -U / +U / -D), which is what makes the sink able to apply updates and
+-- deletes rather than only appending. The connector is configured with
+-- tombstones.on.delete=false, so no null-valued records reach this table.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS default_catalog.default_database.kafka_orders (
+  order_id                   BIGINT,
+  customer_id                BIGINT,
+  external_order_reference   STRING,
+  order_status               STRING,
+  currency                   STRING,
+  total_amount               DECIMAL(12, 2),
+  created_at                 TIMESTAMP(3),
+  updated_at                 TIMESTAMP(3),
+  PRIMARY KEY (order_id) NOT ENFORCED
+) WITH (
+  'connector'                     = 'kafka',
+  'topic'                         = 'aether.public.orders',
+  'properties.bootstrap.servers'  = '${KAFKA_BOOTSTRAP_SERVERS}',
+  'properties.group.id'           = 'aether-flink-orders',
+  'scan.startup.mode'             = 'earliest-offset',
+  'format'                        = 'debezium-json'
+);
+
+-- ---------------------------------------------------------------------------
+-- Sink: Iceberg table keyed by order_id
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS aether_catalog.ecommerce.orders (
+  order_id                   BIGINT,
+  customer_id                BIGINT,
+  external_order_reference   STRING,
+  order_status               STRING,
+  currency                   STRING,
+  total_amount               DECIMAL(12, 2),
+  created_at                 TIMESTAMP(3),
+  updated_at                 TIMESTAMP(3),
+  PRIMARY KEY (order_id) NOT ENFORCED
+) WITH (
+  'upsert-enabled' = 'true'
+);
+
+-- ---------------------------------------------------------------------------
+-- Continuous write
+-- ---------------------------------------------------------------------------
+INSERT INTO aether_catalog.ecommerce.orders
+SELECT
+  order_id,
+  customer_id,
+  external_order_reference,
+  order_status,
+  currency,
+  total_amount,
+  created_at,
+  updated_at
+FROM default_catalog.default_database.kafka_orders;

@@ -54,11 +54,11 @@ services:
       KAFKA_SHARE_COORDINATOR_STATE_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_SHARE_COORDINATOR_STATE_TOPIC_MIN_ISR: 1
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
-      KAFKA_LOG_DIRS: /tmp/kraft-combined-logs
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
     ports:
       - "${KAFKA_PORT:-9092}:9092"
     volumes:
-      - kafka-data:/tmp/kraft-combined-logs
+      - kafka-data:/var/lib/kafka/data
     healthcheck:
       test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:19092 --list >/dev/null 2>&1"]
       interval: 10s
@@ -81,9 +81,9 @@ services:
       OFFSET_STORAGE_REPLICATION_FACTOR: 1
       STATUS_STORAGE_REPLICATION_FACTOR: 1
       KEY_CONVERTER: org.apache.kafka.connect.json.JsonConverter
-      KEY_CONVERTER_SCHEMAS_ENABLE: "false"
+      KEY_CONVERTER_SCHEMAS_ENABLE: "true"
       VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
-      VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
+      VALUE_CONVERTER_SCHEMAS_ENABLE: "true"
       OFFSET_FLUSH_INTERVAL_MS: 10000
       REST_HOST_NAME: 0.0.0.0
       REST_ADVERTISED_HOST_NAME: connect
@@ -108,23 +108,67 @@ services:
     networks:
       - aether
 
-  minio:
-    image: quay.io/minio/minio:RELEASE.2025-09-06T17-38-46Z
-    command: server /data --console-address ":9001"
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?MINIO_ROOT_USER must be set}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD must be set}
+  localstack:
+    image: localstack/localstack:latest
     ports:
-      - "${MINIO_API_PORT:-9000}:9000"
-      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+      - "4566:4566"
+      - "4510-4559:4510-4559"
+    environment:
+      - SERVICES=s3
+      - DEBUG=1
+      - LOCALSTACK_AUTH_TOKEN=dummy
     volumes:
-      - minio-data:/data
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - localstack-data:/var/lib/localstack
     healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
+      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
       interval: 10s
       timeout: 5s
       retries: 12
-      start_period: 10s
+      start_period: 20s
+    restart: unless-stopped
+    networks:
+      - aether
+
+  flink-jobmanager:
+    build: /Users/andrejzivitko/aether-data-platform/services/streaming
+    ports:
+      - "8081:8081"
+    command: jobmanager
+    environment:
+      - |
+        FLINK_PROPERTIES=
+        jobmanager.rpc.address: flink-jobmanager
+        jobmanager.rpc.port: 6123
+        taskmanager.numberOfTaskSlots: 2
+        state.backend: rocksdb
+        state.checkpoints.dir: s3://flink/checkpoints
+        state.savepoints.dir: s3://flink/savepoints
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8081"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
+    volumes:
+      - /Users/andrejzivitko/aether-data-platform/services/streaming/pipeline.py:/opt/flink/pipeline.py
+      - /Users/andrejzivitko/aether-data-platform/infra/docker/libs:/opt/flink/plugins/libs
+    networks:
+      - aether
+
+  flink-taskmanager:
+    build: /Users/andrejzivitko/aether-data-platform/services/streaming
+    depends_on:
+      flink-jobmanager:
+        condition: service_healthy
+    command: taskmanager
+    environment:
+      - |
+        FLINK_PROPERTIES=
+        jobmanager.rpc.address: flink-jobmanager
+        jobmanager.rpc.port: 6123
+        taskmanager.numberOfTaskSlots: 2
     restart: unless-stopped
     networks:
       - aether
@@ -136,4 +180,4 @@ networks:
 volumes:
   postgres-data:
   kafka-data:
-  minio-data:
+  localstack-data:

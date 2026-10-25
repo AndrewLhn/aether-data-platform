@@ -26,9 +26,19 @@ verify-libs:
 libs:
 	$(REPO_ROOT)/scripts/download-flink-libs.sh
 
+# Internal guard, not listed in `make help`: fails with an actionable message
+# instead of letting every docker-dependent target print a socket traceback.
+.PHONY: docker-ready
+docker-ready:
+	@docker info >/dev/null 2>&1 || { \
+	  echo "ERROR: the Docker daemon is not reachable."; \
+	  echo "       On macOS start it with: open -a Docker"; \
+	  echo "       Then wait until it answers: docker info"; \
+	  exit 1; }
+
 ## build: build the Flink image once, so up and pipeline never race on it
 .PHONY: build
-build: | env libs
+build: docker-ready | env libs
 	$(COMPOSE) build
 
 ## up: start the local stack in the background
@@ -38,7 +48,7 @@ up: build
 
 ## down: stop the stack, keeping volumes and data
 .PHONY: down
-down: | env
+down: docker-ready | env
 	$(COMPOSE) down --remove-orphans
 
 ## doctor: dump everything needed to diagnose a stack that will not come up
@@ -48,17 +58,17 @@ doctor:
 
 ## ps: show container status and health
 .PHONY: ps
-ps: | env
+ps: docker-ready | env
 	$(COMPOSE) ps
 
 ## verify-cdc: prove the PostgreSQL -> Kafka CDC slice end to end
 .PHONY: verify-cdc
-verify-cdc: | env
+verify-cdc: docker-ready | env
 	$(REPO_ROOT)/scripts/verify-ecommerce-cdc.sh
 
 ## psql: open a psql shell against the source database
 .PHONY: psql
-psql: | env
+psql: docker-ready | env
 	$(COMPOSE) exec postgres psql -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"
 
 ## pipeline: submit the streaming job to the session cluster
@@ -68,7 +78,7 @@ pipeline: build
 
 ## sql-client: open a Flink SQL Client shell on the job manager
 .PHONY: sql-client
-sql-client: | env
+sql-client: docker-ready | env
 	$(COMPOSE) exec flink-jobmanager ./bin/sql-client.sh
 
 ## lint: run the same static checks that CI runs
@@ -83,7 +93,7 @@ lint:
 
 ## reset: destroy all local state, including volumes (irreversible)
 .PHONY: reset
-reset: | env
+reset: docker-ready | env
 	$(COMPOSE) down -v --remove-orphans
 
 ## help: list available targets

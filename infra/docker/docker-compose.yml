@@ -266,7 +266,9 @@ services:
       # Ask the cluster whether this TaskManager actually registered, rather than
       # whether a TCP port happens to be open. A container that starts but fails
       # to reach the ResourceManager would otherwise report healthy.
-      test: ["CMD-SHELL", "curl --fail --silent --show-error http://flink-jobmanager:8081/taskmanagers | grep -q \"$HOSTNAME\""]
+      # $$ escapes compose interpolation: HOSTNAME must be expanded by the shell
+      # inside the container, not on the host where it is unset.
+      test: ["CMD-SHELL", "curl --fail --silent --show-error http://flink-jobmanager:8081/taskmanagers | grep -q \"$$HOSTNAME\""]
       interval: 10s
       timeout: 5s
       retries: 18

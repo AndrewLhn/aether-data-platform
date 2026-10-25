@@ -237,6 +237,11 @@ services:
 
   flink-taskmanager:
     image: aether/flink:local
+    # Reuses the image that flink-jobmanager builds. pull_policy keeps compose
+    # from trying to fetch a locally built tag from Docker Hub when the image is
+    # absent, which otherwise surfaces as a misleading "pull access denied"
+    # printed alongside the real build error.
+    pull_policy: never
     entrypoint: ["/opt/flink/aether/aether-entrypoint.sh"]
     command: taskmanager
     environment:
@@ -267,6 +272,11 @@ services:
   # without restarting Flink.
   pipeline-submit:
     image: aether/flink:local
+    # Reuses the image that flink-jobmanager builds. pull_policy keeps compose
+    # from trying to fetch a locally built tag from Docker Hub when the image is
+    # absent, which otherwise surfaces as a misleading "pull access denied"
+    # printed alongside the real build error.
+    pull_policy: never
     depends_on:
       flink-jobmanager:
         condition: service_healthy

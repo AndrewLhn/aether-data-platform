@@ -7,17 +7,28 @@ FROM flink:1.20.5-scala_2.12-java11
 
 USER root
 
-# Enable the plugins that ship inside the image but are inactive by default.
-# Copying is used instead of ENABLE_BUILT_IN_PLUGINS so that a renamed or
-# missing JAR fails this build loudly rather than at cluster start-up.
+# Enable the S3 filesystem plugin, which ships inside the image under /opt/flink/opt
+# but is inactive until it is placed in its own plugins/ subdirectory.
 #
-#   s3-fs-hadoop   s3:// FileSystem for checkpoints, savepoints and the
-#                  HadoopCatalog warehouse metadata
-#   rocksdb        incremental checkpointing with state larger than heap
+# The glob keeps this working across patch releases; the explicit test turns a
+# renamed artifact into a build failure that names the problem, instead of a
+# cluster that starts and then cannot resolve s3:// at the first checkpoint.
+#
+# RocksDB is deliberately not copied. As of Flink 1.20 the RocksDB state backend
+# is bundled inside flink-dist rather than shipped as an opt-in plugin, so
+# `state.backend.type: rocksdb` works with nothing to enable. (Verified against
+# flink-dist/src/main/assemblies/opt.xml at tag release-1.20.5, which lists
+# flink-s3-fs-hadoop but no state backend.)
 RUN set -eux; \
-    mkdir -p /opt/flink/plugins/s3-fs-hadoop /opt/flink/plugins/rocksdb; \
-    cp /opt/flink/opt/flink-s3-fs-hadoop-1.20.5.jar /opt/flink/plugins/s3-fs-hadoop/; \
-    cp /opt/flink/opt/flink-statebackend-rocksdb-1.20.5.jar /opt/flink/plugins/rocksdb/
+    mkdir -p /opt/flink/plugins/s3-fs-hadoop; \
+    s3_jar="$(ls /opt/flink/opt/flink-s3-fs-hadoop-*.jar 2>/dev/null | head -n 1)"; \
+    test -n "${s3_jar}" || { \
+      echo "flink-s3-fs-hadoop plugin JAR not found in /opt/flink/opt:" >&2; \
+      ls -1 /opt/flink/opt >&2; \
+      exit 1; \
+    }; \
+    cp "${s3_jar}" /opt/flink/plugins/s3-fs-hadoop/; \
+    echo "enabled ${s3_jar}"
 
 # Operator scripts and the SQL templates they render. Execute bits are set here
 # as well as in git, because a checkout on a filesystem without mode bits would

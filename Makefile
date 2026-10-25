@@ -26,9 +26,14 @@ verify-libs:
 libs:
 	$(REPO_ROOT)/scripts/download-flink-libs.sh
 
+## build: build the Flink image once, so up and pipeline never race on it
+.PHONY: build
+build: | env libs
+	$(COMPOSE) build
+
 ## up: start the local stack in the background
 .PHONY: up
-up: | env libs
+up: build
 	$(COMPOSE) up -d
 
 ## down: stop the stack, keeping volumes and data
@@ -53,7 +58,7 @@ psql: | env
 
 ## pipeline: submit the streaming job to the session cluster
 .PHONY: pipeline
-pipeline: | env libs
+pipeline: build
 	$(COMPOSE) run --rm pipeline-submit
 
 ## sql-client: open a Flink SQL Client shell on the job manager

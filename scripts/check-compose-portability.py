@@ -36,6 +36,9 @@ except ImportError:  # pragma: no cover - guidance beats a traceback
     sys.exit(2)
 
 DEFAULT_TARGETS = ("infra/docker/docker-compose.yml",)
+DEFAULT_ENV_TEMPLATE = ".env.example"
+# ${VAR}, ${VAR:-default}, ${VAR:?error} — the forms compose interpolates.
+INTERPOLATION_RE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)(?::?[-?][^}]*)?\}")
 VOLUME_FLAGS = {"ro", "rw", "z", "Z"}
 # Host paths that are legitimately outside the repository. They still have to
 # exist, but they are not a portability defect.
@@ -147,6 +150,54 @@ def check_build(service: str, build: object, compose_dir: str, repo_root: str,
             )
 
 
+def interpolated_variables(raw_text: str) -> set[str]:
+    """Return every variable the compose file asks the environment for."""
+    return set(INTERPOLATION_RE.findall(raw_text))
+
+
+def template_keys(path: str) -> set[str]:
+    """Return the keys an .env-style template declares."""
+    keys: set[str] = set()
+    with open(path, encoding="utf-8") as handle:
+        for line in handle:
+            match = re.match(r"^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=", line)
+            if match:
+                keys.add(match.group(1))
+    return keys
+
+
+def check_env_template(compose_paths: list[str], template: str,
+                       repo_root: str) -> list[str]:
+    """Fail when compose interpolates a variable the template never declares.
+
+    This is the defect class behind the stale-.env start-up failure: a required
+    variable existed only in someone's local .env, so a fresh environment had no
+    way to learn it was needed.
+    """
+    errors: list[str] = []
+    template_path = os.path.join(repo_root, template)
+
+    if not os.path.isfile(template_path):
+        return [f"{template}: template not found, cannot verify variable coverage"]
+
+    declared = template_keys(template_path)
+    required: set[str] = set()
+
+    for compose_path in compose_paths:
+        if os.path.isfile(compose_path):
+            with open(compose_path, encoding="utf-8") as handle:
+                required |= interpolated_variables(handle.read())
+
+    missing = sorted(required - declared)
+    if missing:
+        errors.append(
+            f"{template} does not declare variable(s) the compose file "
+            f"interpolates: {', '.join(missing)}"
+        )
+
+    return errors
+
+
 def check_file(path: str, repo_root: str, strict: bool) -> tuple[list[str], list[str]]:
     errors: list[str] = []
     warnings: list[str] = []
@@ -184,6 +235,11 @@ def main() -> int:
                         help="compose files to inspect (default: %(default)s)")
     parser.add_argument("--strict", action="store_true",
                         help="also fail on relative paths that git does not track")
+    parser.add_argument("--env-template", default=DEFAULT_ENV_TEMPLATE,
+                        help="dotenv template that must cover every interpolated "
+                             "variable (default: %(default)s)")
+    parser.add_argument("--skip-env-template", action="store_true",
+                        help="only check host paths")
     args = parser.parse_args()
 
     targets = args.compose_files or list(DEFAULT_TARGETS)
@@ -202,6 +258,9 @@ def main() -> int:
         errors, warnings = check_file(target, repo_root, args.strict)
         all_errors.extend(errors)
         all_warnings.extend(warnings)
+
+    if not args.skip_env_template:
+        all_errors.extend(check_env_template(targets, args.env_template, repo_root))
 
     for warning in all_warnings:
         print(f"WARN  {warning}")

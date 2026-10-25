@@ -11,11 +11,10 @@ ENV_FILE    := $(REPO_ROOT)/.env
 COMPOSE_FILE := $(REPO_ROOT)/infra/docker/docker-compose.yml
 COMPOSE     := docker compose --env-file $(ENV_FILE) -f $(COMPOSE_FILE)
 
-## env: create .env from .env.example if it does not exist
+## env: create .env, or bring an existing one in line with .env.example
 .PHONY: env
 env:
-	@test -f $(ENV_FILE) || cp $(REPO_ROOT)/.env.example $(ENV_FILE)
-	@test -f $(ENV_FILE) && echo ".env is present."
+	@$(REPO_ROOT)/scripts/sync-env.py --env-file $(ENV_FILE) --template $(REPO_ROOT)/.env.example
 
 ## verify-libs: re-download every pinned artifact and re-check its digest
 .PHONY: verify-libs

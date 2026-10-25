@@ -3,7 +3,21 @@
 # The base image is pinned to an exact patch version: the `1.20` tag floats, so
 # a rebuild weeks later could silently change the runtime under a job whose
 # savepoints and state are version-sensitive.
-FROM flink:1.20.5-scala_2.12-java11
+#
+# The java17 variant is required, not a preference. Apache Iceberg moved its
+# baseline to JDK 17, so iceberg-flink-runtime-1.20 carries class file version
+# 61 bytecode. On a java11 image (version 55) the JAR is on the classpath but
+# cannot be loaded, and SQL Client fails during service discovery with
+#
+#   UnsupportedClassVersionError: org/apache/iceberg/flink/FlinkDynamicTableFactory
+#   has been compiled by a more recent version of the Java Runtime
+#
+# which surfaces as "Failed to start the embedded sql-gateway" and names neither
+# the JAR nor the Java version. Flink 1.20 supports Java 17 and the official
+# image already sets the required --add-exports/--add-opens flags. It also
+# removes the "Unknown module: jdk.compiler" warnings, which were the JRE 11
+# image lacking a module the flags referred to.
+FROM flink:1.20.5-scala_2.12-java17
 
 USER root
 

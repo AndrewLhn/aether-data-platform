@@ -45,6 +45,10 @@ infra/docker/volumes/
 *.crt
 
 # Downloaded Flink libraries (resolved by scripts/download-flink-libs.sh
-# from infra/docker/flink/libs.lock). Digests are committed, binaries are not.
-infra/docker/flink/lib/
+# from infra/docker/flink/libs.lock). Digests and placeholders are committed,
+# binaries are not. The `/*` form is required: git cannot re-include a file
+# whose parent directory is excluded.
+infra/docker/flink/lib/*
+!infra/docker/flink/lib/.gitkeep
+!infra/docker/flink/lib/README.md
 infra/docker/flink/plugins/

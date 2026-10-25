@@ -22,7 +22,7 @@ x-flink-environment: &flink-environment
     parallelism.default: 1
     state.backend.type: rocksdb
     state.checkpoints.dir: s3://${S3_CHECKPOINT_BUCKET:-aether-flink}/checkpoints
-    state.savepoints.dir: s3://${S3_CHECKPOINT_BUCKET:-aether-flink}/savepoints
+    execution.checkpointing.savepoint-dir: s3://${S3_CHECKPOINT_BUCKET:-aether-flink}/savepoints
     execution.checkpointing.interval: ${CHECKPOINT_INTERVAL_SECONDS:-30}s
     execution.checkpointing.mode: EXACTLY_ONCE
     execution.checkpointing.min-pause: 5s
@@ -226,7 +226,13 @@ services:
       - ../../services/streaming/sql:/opt/flink/sql-src:ro
       - ../../services/streaming/docker:/opt/flink/aether:ro
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8081"]
+      # Probe a REST route that returns 200. The web UI is served at '/', but
+      # `wget --spider http://localhost:8081` against it exits 8 ("server issued
+      # an error response"), which left a fully functional JobManager marked
+      # unhealthy and blocked every service waiting on it. /overview is part of
+      # the REST API and returns 200 as soon as the endpoint has leadership.
+      # curl is present in the base image and reports HTTP status unambiguously.
+      test: ["CMD-SHELL", "curl --fail --silent --show-error http://localhost:8081/overview >/dev/null"]
       interval: 10s
       timeout: 5s
       retries: 18
@@ -257,11 +263,14 @@ services:
       - ../../services/streaming/sql:/opt/flink/sql-src:ro
       - ../../services/streaming/docker:/opt/flink/aether:ro
     healthcheck:
-      test: ["CMD-SHELL", "bash -c '>/dev/tcp/flink-jobmanager/6123'"]
+      # Ask the cluster whether this TaskManager actually registered, rather than
+      # whether a TCP port happens to be open. A container that starts but fails
+      # to reach the ResourceManager would otherwise report healthy.
+      test: ["CMD-SHELL", "curl --fail --silent --show-error http://flink-jobmanager:8081/taskmanagers | grep -q \"$HOSTNAME\""]
       interval: 10s
       timeout: 5s
       retries: 18
-      start_period: 30s
+      start_period: 40s
     restart: unless-stopped
     networks:
       - aether

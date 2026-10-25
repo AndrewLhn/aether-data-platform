@@ -47,6 +47,11 @@ verify-cdc: | env
 psql: | env
 	$(COMPOSE) exec postgres psql -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"
 
+## pipeline: submit the streaming job to the session cluster
+.PHONY: pipeline
+pipeline: | env libs
+	$(COMPOSE) run --rm pipeline-submit
+
 ## sql-client: open a Flink SQL Client shell on the job manager
 .PHONY: sql-client
 sql-client: | env

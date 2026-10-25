@@ -12,7 +12,7 @@ set -euo pipefail
 SQL_OUT_DIR="${SQL_OUT_DIR:-/opt/flink/sql}"
 PIPELINE_SQL="${PIPELINE_SQL:-${SQL_OUT_DIR}/pipeline.sql}"
 
-/opt/flink/aether/render-sql.sh
+/opt/flink/aether/prepare-runtime.sh
 
 if [[ ! -f "${PIPELINE_SQL}" ]]; then
   echo "Rendered pipeline not found at ${PIPELINE_SQL}." >&2

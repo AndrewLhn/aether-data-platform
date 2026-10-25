@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 #
-# Render the pipeline SQL templates, then hand over to the stock Flink
-# entrypoint so jemalloc, plugin activation and FLINK_PROPERTIES handling all
-# keep working exactly as upstream intends.
+# Put the mounted connector JARs on the classpath and render the pipeline SQL
+# templates, then hand over to the stock Flink entrypoint so jemalloc, plugin
+# activation and FLINK_PROPERTIES handling all keep working as upstream intends.
 
 set -euo pipefail
 
-/opt/flink/aether/render-sql.sh
+/opt/flink/aether/prepare-runtime.sh
 
 exec /docker-entrypoint.sh "$@"

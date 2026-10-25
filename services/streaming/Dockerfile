@@ -44,7 +44,10 @@ RUN set -eux; \
 # mounted to /opt/flink/usrlib, which keeps the image small and makes a version
 # bump a lock-file change instead of an image rebuild.
 #
-# /opt/flink/lib is deliberately left alone: mounting over it would shadow the
-# JARs the base image ships.
+# They are not mounted onto /opt/flink/lib, because a bind mount replaces the
+# directory and would hide every JAR the base image ships. Instead
+# aether/prepare-runtime.sh symlinks them into lib at container start, which is
+# what makes them visible to SQL Client: Flink only adds usrlib to the user-code
+# classloader for `flink run` submissions, not for sql-client.
 
 USER flink

@@ -52,6 +52,15 @@ psql: | env
 sql-client: | env
 	$(COMPOSE) exec flink-jobmanager ./bin/sql-client.sh
 
+## lint: run the same static checks that CI runs
+.PHONY: lint
+lint:
+	$(REPO_ROOT)/scripts/check-compose-portability.sh
+	@for f in $(REPO_ROOT)/scripts/*.sh; do bash -n "$$f" || exit 1; done
+	@sh -n $(REPO_ROOT)/infra/docker/postgres/init/01-create-debezium-user.sh
+	@node -e 'JSON.parse(require("fs").readFileSync("$(REPO_ROOT)/infra/docker/connectors/aether-postgres-cdc.json","utf8"))'
+	@echo "Lint passed."
+
 ## reset: destroy all local state, including volumes (irreversible)
 .PHONY: reset
 reset: | env

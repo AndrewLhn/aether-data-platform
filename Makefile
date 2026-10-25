@@ -34,12 +34,17 @@ build: | env libs
 ## up: start the local stack in the background
 .PHONY: up
 up: build
-	$(COMPOSE) up -d
+	$(COMPOSE) up -d --remove-orphans
 
 ## down: stop the stack, keeping volumes and data
 .PHONY: down
 down: | env
-	$(COMPOSE) down
+	$(COMPOSE) down --remove-orphans
+
+## doctor: dump everything needed to diagnose a stack that will not come up
+.PHONY: doctor
+doctor:
+	$(REPO_ROOT)/scripts/diagnose-stack.sh
 
 ## ps: show container status and health
 .PHONY: ps

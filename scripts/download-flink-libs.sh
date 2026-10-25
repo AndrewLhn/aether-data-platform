@@ -40,9 +40,25 @@ verified=0
 downloaded=0
 cached=0
 
+# Validate the lock file structurally before spending any bandwidth. This is
+# what turns a mistyped digest into an immediate, named error instead of a
+# 5.6 MB download that ends in a generic mismatch.
+if [[ -f "${repository_root}/scripts/check-flink-libs-lock.py" ]] &&
+   command -v python3 >/dev/null 2>&1; then
+  python3 "${repository_root}/scripts/check-flink-libs-lock.py" "${lock_file}" || exit 1
+fi
+
 while read -r expected_sha target url; do
   # Skip blank lines and comments.
   [[ -z "${expected_sha}" || "${expected_sha}" == \#* ]] && continue
+
+  # Defence in depth for the case where python3 is unavailable: a SHA-512 is
+  # exactly 128 lowercase hex characters, so anything else cannot match.
+  if [[ ! "${expected_sha}" =~ ^[0-9a-f]{128}$ ]]; then
+    echo "Malformed digest for ${target}: expected 128 lowercase hex characters, got ${#expected_sha}." >&2
+    failures=$((failures + 1))
+    continue
+  fi
 
   path="${libs_dir}/${target}"
 

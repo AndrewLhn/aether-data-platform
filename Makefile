@@ -17,6 +17,11 @@ env:
 	@test -f $(ENV_FILE) || cp $(REPO_ROOT)/.env.example $(ENV_FILE)
 	@test -f $(ENV_FILE) && echo ".env is present."
 
+## verify-libs: re-download every pinned artifact and re-check its digest
+.PHONY: verify-libs
+verify-libs:
+	$(REPO_ROOT)/scripts/check-flink-libs-lock.py --verify-downloads
+
 ## libs: download and SHA-512 verify the pinned Flink libraries
 .PHONY: libs
 libs:
@@ -61,6 +66,7 @@ sql-client: | env
 .PHONY: lint
 lint:
 	$(REPO_ROOT)/scripts/check-compose-portability.sh
+	$(REPO_ROOT)/scripts/check-flink-libs-lock.py
 	@for f in $(REPO_ROOT)/scripts/*.sh; do bash -n "$$f" || exit 1; done
 	@sh -n $(REPO_ROOT)/infra/docker/postgres/init/01-create-debezium-user.sh
 	@node -e 'JSON.parse(require("fs").readFileSync("$(REPO_ROOT)/infra/docker/connectors/aether-postgres-cdc.json","utf8"))'

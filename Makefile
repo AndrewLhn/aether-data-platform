@@ -21,6 +21,11 @@ env:
 verify-libs:
 	$(REPO_ROOT)/scripts/check-flink-libs-lock.py --verify-downloads
 
+## verify-java: check every pinned library is loadable by the image JVM
+.PHONY: verify-java
+verify-java:
+	$(REPO_ROOT)/scripts/check-java-requirement.py
+
 ## libs: download and SHA-512 verify the pinned Flink libraries
 .PHONY: libs
 libs:

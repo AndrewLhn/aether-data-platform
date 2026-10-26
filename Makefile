@@ -71,6 +71,11 @@ ps: docker-ready | env
 verify-cdc: docker-ready | env
 	$(REPO_ROOT)/scripts/verify-ecommerce-cdc.sh
 
+## verify-stream: check the submitted job is running, checkpointing and writing
+.PHONY: verify-stream
+verify-stream: docker-ready | env
+	$(REPO_ROOT)/scripts/verify-streaming.sh
+
 ## psql: open a psql shell against the source database
 .PHONY: psql
 psql: docker-ready | env

@@ -291,6 +291,12 @@ services:
   # instead of a crash-looping cluster, and so `make pipeline` can resubmit
   # without restarting Flink.
   pipeline-submit:
+    # A one-shot submitter, not a service. Without a profile it starts on every
+    # `compose up`, including the one inside verify-ecommerce-cdc.sh, which
+    # quietly submitted a second writer into the same Iceberg table. `compose run`
+    # and `compose up` auto-enable the profile of a service named explicitly, so
+    # `make pipeline` still works and plain `make up` no longer resubmits.
+    profiles: ["submit"]
     image: aether/flink:local
     # Reuses the image that flink-jobmanager builds. pull_policy keeps compose
     # from trying to fetch a locally built tag from Docker Hub when the image is

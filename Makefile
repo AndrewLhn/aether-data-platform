@@ -71,6 +71,16 @@ ps: docker-ready | env
 verify-cdc: docker-ready | env
 	$(REPO_ROOT)/scripts/verify-ecommerce-cdc.sh
 
+## jobs: list Flink jobs and warn when the pipeline was submitted twice
+.PHONY: jobs
+jobs: docker-ready | env
+	$(REPO_ROOT)/scripts/flink-jobs.py --env-file $(ENV_FILE)
+
+## cancel-jobs: cancel every job on the cluster
+.PHONY: cancel-jobs
+cancel-jobs: docker-ready | env
+	$(REPO_ROOT)/scripts/flink-jobs.py --env-file $(ENV_FILE) --cancel-all
+
 ## verify-stream: check the submitted job is running, checkpointing and writing
 .PHONY: verify-stream
 verify-stream: docker-ready | env

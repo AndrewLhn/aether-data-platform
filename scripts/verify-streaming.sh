@@ -52,10 +52,9 @@ for job in $(printf '%s' "${jobs_json}" | grep -oE '"jid":"[0-9a-f]+"' | cut -d'
   curl --fail --silent --show-error "${rest}/jobs/${job}/checkpoints" \
     | head -c 2000
   echo
-  echo "    exceptions:"
+  echo "    exceptions (full stack, unwrapped):"
   curl --fail --silent --show-error "${rest}/jobs/${job}/exceptions" \
-    | head -c 1500
-  echo
+    | python3 "${repository_root}/scripts/print-flink-exception.py"
 done
 
 section "4. Debezium connector state"

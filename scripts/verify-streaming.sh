@@ -85,10 +85,14 @@ echo "  --- objects under the warehouse prefix"
   "echo 's3.bucket.list -v' | weed shell -master=localhost:9333 2>/dev/null" | head -30 | sed 's/^/    /' 
 
 section "7. Iceberg catalog rows recorded in PostgreSQL"
+# Columns are listed rather than hardcoded: JdbcCatalog owns this table's schema
+# and it differs between Iceberg versions, so a fixed column list fails with
+# "column ... does not exist" instead of reporting anything.
 "${compose[@]}" exec -T postgres psql \
   --username "$(env_value POSTGRES_USER)" \
   --dbname "$(env_value POSTGRES_DB)" \
-  --command "SELECT catalog_name, namespace, table_name FROM iceberg_tables;" 2>&1 | sed 's/^/  /'
+  --command "SELECT column_name FROM information_schema.columns WHERE table_name = 'iceberg_tables' ORDER BY ordinal_position;" \
+  --command "SELECT * FROM iceberg_tables;" 2>&1 | sed 's/^/  /'
 
 section "8. TaskManager log: errors and checkpoint activity"
 "${compose[@]}" logs --tail 400 flink-taskmanager 2>&1 \

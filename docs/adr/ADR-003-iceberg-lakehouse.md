@@ -1,6 +1,6 @@
 # ADR-003: Use Apache Iceberg for lakehouse tables
 
-- **Status:** Accepted
+- **Status:** Accepted. The table format stands; the object store and the deferred catalog choice are settled by [ADR-005](ADR-005-object-store-and-iceberg-catalog.md).
 - **Date:** 2026-10-12
 - **Decision makers:** Aether project maintainers
 

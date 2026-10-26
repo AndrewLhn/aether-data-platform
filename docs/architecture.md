@@ -14,7 +14,7 @@ flowchart LR
     CDC --> K[(Kafka)]
     API --> K
     K --> STREAM[Flink streaming jobs]
-    STREAM --> LAKE[(Iceberg lakehouse<br/>MinIO / S3)]
+    STREAM --> LAKE[(Iceberg lakehouse<br/>S3-compatible object store)]
     LAKE --> QUERY[Trino]
     QUERY --> CONSUMERS[Analysts, finance, operations]
     CONTROL[Recovery Engine] -. governs & observes .-> CDC
@@ -31,7 +31,7 @@ flowchart LR
 | API ingestion | Fetches external data using cursors/idempotency keys and emits the common event envelope | CDC semantics for PostgreSQL |
 | Kafka | Durable, partitioned event transport and replayable retention window | Global ordering or business deduplication |
 | Flink | Stateful validation, enrichment, deduplication, event-time handling, and checkpointed processing | Long-term raw archival or operator policy |
-| Iceberg + MinIO/S3 | Versioned durable tables, snapshots, schema evolution, time travel, and object storage | Low-latency operational source of truth |
+| Iceberg + S3-compatible object store | Versioned durable tables, snapshots, schema evolution, time travel, and object storage | Low-latency operational source of truth |
 | Trino + dbt | Query serving, modeled data products, and data tests | Streaming recovery |
 | Recovery Engine | Replay workflow, incident/audit history, reconciliation orchestration, and control-plane policy | Inline transformation or a hard dependency on the data path |
 

@@ -40,7 +40,7 @@ The thresholds below are **initial engineering targets**, not verified service-l
 ## Assumptions and constraints
 
 - PostgreSQL is the initial CDC source and Kafka is the durable event backbone.
-- The local environment uses MinIO as an S3-compatible store; production deployments may use a managed object store.
+- The local environment uses SeaweedFS as an S3-compatible store; production deployments may use a managed object store. See [ADR-005](adr/ADR-005-object-store-and-iceberg-catalog.md).
 - The initial implementation favours a correct, observable single-region baseline over high availability across regions.
 - Data contracts will start with a repository-managed schema format; a registry may be added once the producer/consumer workflow needs it.
 - Metrics become targets only after the load profile, hardware/runtime, and test evidence are recorded.

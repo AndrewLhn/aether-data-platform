@@ -21,7 +21,7 @@ x-flink-environment: &flink-environment
     taskmanager.numberOfTaskSlots: ${FLINK_TASK_SLOTS:-2}
     parallelism.default: 1
     state.backend.type: rocksdb
-    state.checkpoints.dir: s3://${S3_CHECKPOINT_BUCKET:-aether-flink}/checkpoints
+    execution.checkpointing.dir: s3://${S3_CHECKPOINT_BUCKET:-aether-flink}/checkpoints
     execution.checkpointing.savepoint-dir: s3://${S3_CHECKPOINT_BUCKET:-aether-flink}/savepoints
     execution.checkpointing.interval: ${CHECKPOINT_INTERVAL_SECONDS:-30}s
     execution.checkpointing.mode: EXACTLY_ONCE

@@ -76,6 +76,7 @@ sequenceDiagram
 ## Event and lineage contract
 
 Every data-plane event must adhere to a strict envelope:
+
 - `event_id`: UUID or deterministic hash for deduplication.
 - `event_type` and `schema_version`: For contract routing and evolution.
 - `occurred_at` (Event Time) and `ingested_at` (Processing Time).

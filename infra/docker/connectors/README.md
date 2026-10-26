@@ -46,10 +46,11 @@ exactness for no benefit here.
 string such as `2026-10-26T19:27:53.701115Z`. Two consumer-side settings have to
 match it, and each fails differently when it does not:
 
-* `debezium-json.timestamp-format.standard` defaults to `SQL`, whose formatter
+- `debezium-json.timestamp-format.standard` defaults to `SQL`, whose formatter
   separates date and time with a space. Parsing fails at the `T`, reported as
   `could not be parsed at index 10` — an index, not a reason.
-* With `ISO-8601`, a plain `TIMESTAMP` column uses `ISO_LOCAL_DATE_TIME`, which
+
+- With `ISO-8601`, a plain `TIMESTAMP` column uses `ISO_LOCAL_DATE_TIME`, which
   accepts the `T` but not the trailing `Z`. Only `TIMESTAMP_LTZ` uses the
   formatter that appends `'Z'`.
 

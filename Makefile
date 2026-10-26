@@ -106,6 +106,7 @@ sql-client: docker-ready | env
 lint:
 	$(REPO_ROOT)/scripts/check-compose-portability.sh
 	$(REPO_ROOT)/scripts/check-flink-libs-lock.py
+	$(REPO_ROOT)/scripts/check-markdown.py
 	@for f in $(REPO_ROOT)/scripts/*.sh; do bash -n "$$f" || exit 1; done
 	@sh -n $(REPO_ROOT)/infra/docker/postgres/init/01-create-debezium-user.sh
 	@node -e 'JSON.parse(require("fs").readFileSync("$(REPO_ROOT)/infra/docker/connectors/aether-postgres-cdc.json","utf8"))'

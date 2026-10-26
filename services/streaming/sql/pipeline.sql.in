@@ -70,6 +70,16 @@ CREATE DATABASE IF NOT EXISTS aether_catalog.ecommerce;
 -- (+I / -U / +U / -D), which is what makes the sink able to apply updates and
 -- deletes rather than only appending. The connector is configured with
 -- tombstones.on.delete=false, so no null-valued records reach this table.
+--
+-- schema-include is load-bearing, not cosmetic. Kafka Connect runs with
+-- VALUE_CONVERTER_SCHEMAS_ENABLE=true, so every message is wrapped as
+-- {"schema":{...},"payload":{...}}. The format option defaults to false, which
+-- makes the deserializer look for before/after/op at the JSON root. They are not
+-- there, JsonToRowDataConverters.convertField returns null for a missing field
+-- rather than failing, and DebeziumJsonDeserializationSchema:152 then throws a
+-- NullPointerException on payload.getField(2).toString() — reported as
+-- "Corrupt Debezium JSON message" with the whole message echoed, which reads
+-- like bad data rather than a format option that was never set.
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS default_catalog.default_database.kafka_orders (
   order_id                   BIGINT,
@@ -87,7 +97,8 @@ CREATE TABLE IF NOT EXISTS default_catalog.default_database.kafka_orders (
   'properties.bootstrap.servers'  = '${KAFKA_BOOTSTRAP_SERVERS}',
   'properties.group.id'           = 'aether-flink-orders',
   'scan.startup.mode'             = 'earliest-offset',
-  'format'                        = 'debezium-json'
+  'format'                        = 'debezium-json',
+  'debezium-json.schema-include'  = 'true'
 );
 
 -- ---------------------------------------------------------------------------

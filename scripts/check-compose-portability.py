@@ -51,13 +51,21 @@ ABSOLUTE_PATH = re.compile(r"^(?:/|[A-Za-z]:[\\/])")
 
 
 def git_tracked(repo_root: str, path: str) -> bool:
-    """Return True when git has the path under version control."""
-    result = subprocess.run(
-        ["git", "ls-files", "--error-unmatch", "--", path],
-        cwd=repo_root,
-        capture_output=True,
-        check=False,
-    )
+    """Return True when git has the path under version control.
+
+    Only used by --strict. If git is unavailable, or the directory is not a
+    working tree, the answer is unknown rather than false, so the caller treats
+    it as tracked and does not fail on an environment problem.
+    """
+    try:
+        result = subprocess.run(
+            ["git", "ls-files", "--error-unmatch", "--", path],
+            cwd=repo_root,
+            capture_output=True,
+            check=False,
+        )
+    except OSError:
+        return True
     return result.returncode == 0
 
 
@@ -243,10 +251,12 @@ def main() -> int:
     args = parser.parse_args()
 
     targets = args.compose_files or list(DEFAULT_TARGETS)
-    repo_root = subprocess.run(
-        ["git", "rev-parse", "--show-toplevel"],
-        capture_output=True, text=True, check=True,
-    ).stdout.strip()
+
+    # Derive the repository root from this file's location rather than from git.
+    # `git rev-parse --show-toplevel` with check=True raised a raw
+    # CalledProcessError traceback when the script was invoked from outside a
+    # working tree, which is worse than useless in a diagnostic tool.
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
     all_errors: list[str] = []
     all_warnings: list[str] = []

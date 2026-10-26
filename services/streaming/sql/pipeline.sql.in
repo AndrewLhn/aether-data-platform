@@ -32,19 +32,20 @@ SET 'write.format-version' = '2';
 -- ---------------------------------------------------------------------------
 -- JdbcCatalog rather than HadoopCatalog.
 --
--- HadoopCatalog needs org.apache.hadoop.conf.Configuration, which is not in
--- iceberg-flink-runtime and not in iceberg-aws-bundle: Iceberg declares Hadoop
--- as provided. CREATE CATALOG fails with ClassNotFoundException, reported as a
--- bare SQL error with no hint about the missing dependency.
+-- Note that this choice is not what makes CREATE CATALOG work. iceberg-flink-runtime
+-- ships no org/apache/hadoop classes, and Iceberg builds a Hadoop Configuration while
+-- initialising any catalog, so hadoop-client-api and hadoop-client-runtime are
+-- required regardless of the type chosen. Picking a different catalog to dodge that
+-- ClassNotFoundException does not work; it fails identically.
 --
--- JdbcCatalog keeps table metadata in PostgreSQL, which this stack already runs,
--- and needs only its JDBC driver. It also gives atomic commits, which
--- HadoopCatalog cannot offer on an object store: it relies on renaming a
--- version-hint file, and S3 renames are neither atomic nor cheap.
+-- JdbcCatalog is chosen on its merits. It keeps table metadata in PostgreSQL, which
+-- this stack already runs, and it commits in a database transaction. HadoopCatalog
+-- commits by renaming a version-hint file, and on an object store a rename is neither
+-- atomic nor cheap, so concurrent writers can lose commits.
 --
--- The trade-off is that the lakehouse catalog now depends on the transactional
--- database. Acceptable for a single-node local stack; a REST catalog is the
--- production-shaped successor and can be adopted without touching the pipeline.
+-- The trade-off is that the lakehouse catalog depends on the transactional database.
+-- Acceptable for a single-node local stack; a REST catalog is the production-shaped
+-- successor and can be adopted without touching the pipeline.
 CREATE CATALOG aether_catalog WITH (
   'type'                 = 'iceberg',
   'catalog-impl'         = 'org.apache.iceberg.jdbc.JdbcCatalog',

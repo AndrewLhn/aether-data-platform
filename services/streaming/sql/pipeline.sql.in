@@ -7,7 +7,8 @@
 --
 -- Placeholders: ${KAFKA_BOOTSTRAP_SERVERS}, ${S3_ENDPOINT_INTERNAL},
 --               ${S3_ACCESS_KEY_ID}, ${S3_SECRET_ACCESS_KEY}, ${S3_REGION},
---               ${S3_WAREHOUSE_BUCKET}
+--               ${S3_WAREHOUSE_BUCKET}, ${POSTGRES_JDBC_URL},
+--               ${POSTGRES_USER}, ${POSTGRES_PASSWORD}
 
 -- ---------------------------------------------------------------------------
 -- Session configuration
@@ -29,9 +30,27 @@ SET 'write.format-version' = '2';
 -- ---------------------------------------------------------------------------
 -- Iceberg catalog
 -- ---------------------------------------------------------------------------
+-- JdbcCatalog rather than HadoopCatalog.
+--
+-- HadoopCatalog needs org.apache.hadoop.conf.Configuration, which is not in
+-- iceberg-flink-runtime and not in iceberg-aws-bundle: Iceberg declares Hadoop
+-- as provided. CREATE CATALOG fails with ClassNotFoundException, reported as a
+-- bare SQL error with no hint about the missing dependency.
+--
+-- JdbcCatalog keeps table metadata in PostgreSQL, which this stack already runs,
+-- and needs only its JDBC driver. It also gives atomic commits, which
+-- HadoopCatalog cannot offer on an object store: it relies on renaming a
+-- version-hint file, and S3 renames are neither atomic nor cheap.
+--
+-- The trade-off is that the lakehouse catalog now depends on the transactional
+-- database. Acceptable for a single-node local stack; a REST catalog is the
+-- production-shaped successor and can be adopted without touching the pipeline.
 CREATE CATALOG aether_catalog WITH (
   'type'                 = 'iceberg',
-  'catalog-type'         = 'hadoop',
+  'catalog-impl'         = 'org.apache.iceberg.jdbc.JdbcCatalog',
+  'uri'                  = '${POSTGRES_JDBC_URL}',
+  'jdbc.user'            = '${POSTGRES_USER}',
+  'jdbc.password'        = '${POSTGRES_PASSWORD}',
   'warehouse'            = 's3://${S3_WAREHOUSE_BUCKET}/warehouse',
   'io-impl'              = 'org.apache.iceberg.aws.s3.S3FileIO',
   's3.endpoint'          = '${S3_ENDPOINT_INTERNAL}',

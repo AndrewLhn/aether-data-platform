@@ -39,6 +39,10 @@ x-flink-environment: &flink-environment
   S3_REGION: ${S3_REGION:-us-east-1}
   S3_WAREHOUSE_BUCKET: ${S3_WAREHOUSE_BUCKET:-aether-lakehouse}
   KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS_INTERNAL:-kafka:19092}
+  # Rendered into the pipeline SQL for the Iceberg JdbcCatalog.
+  POSTGRES_JDBC_URL: ${POSTGRES_JDBC_URL:?POSTGRES_JDBC_URL must be set}
+  POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER must be set}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
 
 services:
   postgres:

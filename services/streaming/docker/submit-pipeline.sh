@@ -11,6 +11,8 @@ set -euo pipefail
 
 SQL_OUT_DIR="${SQL_OUT_DIR:-/opt/flink/sql}"
 PIPELINE_SQL="${PIPELINE_SQL:-${SQL_OUT_DIR}/pipeline.sql}"
+REST_ADDRESS="${FLINK_REST_ADDRESS:-flink-jobmanager}"
+REST_PORT="${FLINK_REST_PORT:-8081}"
 
 /opt/flink/aether/prepare-runtime.sh
 
@@ -20,5 +22,14 @@ if [[ ! -f "${PIPELINE_SQL}" ]]; then
   exit 1
 fi
 
-echo "Submitting ${PIPELINE_SQL}"
-exec /opt/flink/bin/sql-client.sh -f "${PIPELINE_SQL}"
+# SQL Client runs embedded by default and reads the cluster address from the
+# Flink configuration, where rest.address is 0.0.0.0 because the official image
+# entrypoint rewrites it for binding. A client cannot connect to that, and the
+# resulting failure is a bare "java.net.ConnectException: Connection refused" at
+# the first statement that needs the cluster. Point the client at the JobManager
+# by hostname instead of changing the cluster's own advertised address.
+echo "Submitting ${PIPELINE_SQL} to ${REST_ADDRESS}:${REST_PORT}"
+exec /opt/flink/bin/sql-client.sh \
+  -Drest.address="${REST_ADDRESS}" \
+  -Drest.port="${REST_PORT}" \
+  -f "${PIPELINE_SQL}"

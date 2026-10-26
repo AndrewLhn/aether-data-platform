@@ -84,7 +84,7 @@ pipeline: build
 ## sql-client: open a Flink SQL Client shell on the job manager
 .PHONY: sql-client
 sql-client: docker-ready | env
-	$(COMPOSE) exec flink-jobmanager ./bin/sql-client.sh
+	$(COMPOSE) exec flink-jobmanager ./bin/sql-client.sh -Drest.address=flink-jobmanager -Drest.port=8081
 
 ## lint: run the same static checks that CI runs
 .PHONY: lint

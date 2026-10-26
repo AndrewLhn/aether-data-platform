@@ -40,6 +40,26 @@ workaround belongs on the producer side.
 into `DECIMAL(12, 2)` without loss. `double` would also work but trades away
 exactness for no benefit here.
 
+## Timestamps: the consumer needs ISO-8601 and `TIMESTAMP_LTZ`
+
+`TIMESTAMPTZ` columns arrive as `io.debezium.time.ZonedTimestamp`, an RFC 3339
+string such as `2026-10-26T19:27:53.701115Z`. Two consumer-side settings have to
+match it, and each fails differently when it does not:
+
+* `debezium-json.timestamp-format.standard` defaults to `SQL`, whose formatter
+  separates date and time with a space. Parsing fails at the `T`, reported as
+  `could not be parsed at index 10` — an index, not a reason.
+* With `ISO-8601`, a plain `TIMESTAMP` column uses `ISO_LOCAL_DATE_TIME`, which
+  accepts the `T` but not the trailing `Z`. Only `TIMESTAMP_LTZ` uses the
+  formatter that appends `'Z'`.
+
+Precision is milliseconds, while Debezium emits microseconds, so the last three
+digits are dropped. That is deliberate for now; `TIMESTAMP_LTZ(6)` plus
+`time.precision.mode=adaptive_time_microseconds` would preserve them.
+
+Changing any of this changes what the reader must expect, so the connector
+configuration and `services/streaming/sql/pipeline.sql.in` have to move together.
+
 ## `tombstones.on.delete: false`
 
 A delete produces both a `-D` change event and a null-valued tombstone. Flink's

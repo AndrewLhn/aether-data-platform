@@ -22,6 +22,14 @@ SET 'execution.runtime-mode' = 'streaming';
 SET 'execution.checkpointing.interval' = '30s';
 SET 'execution.checkpointing.mode' = 'EXACTLY_ONCE';
 
+-- Debezium emits io.debezium.time.ZonedTimestamp as RFC 3339, e.g.
+-- 2026-10-26T19:27:53.701115Z. The JSON format defaults to
+-- timestamp-format.standard=SQL, whose formatter is
+-- ISO_LOCAL_DATE + ' ' + time, so it rejects the 'T' separator outright:
+-- "Text '...' could not be parsed at index 10". Index 10 is the 'T'.
+-- ISO-8601 is required, and see the TIMESTAMP_LTZ note on the source table for
+-- why ISO-8601 alone is still not enough.
+
 -- Equality deletes, which `upsert-enabled` relies on, require table format
 -- version 2. Stated explicitly so the contract does not depend on the default
 -- of whichever Iceberg version happens to be on the classpath.
@@ -88,8 +96,12 @@ CREATE TABLE IF NOT EXISTS default_catalog.default_database.kafka_orders (
   order_status               STRING,
   currency                   STRING,
   total_amount               DECIMAL(12, 2),
-  created_at                 TIMESTAMP(3),
-  updated_at                 TIMESTAMP(3),
+  -- TIMESTAMP_LTZ, not TIMESTAMP. With timestamp-format.standard=ISO-8601 the
+  -- formatter for TIMESTAMP is ISO_LOCAL_DATE_TIME, which accepts the 'T' but
+  -- not the trailing 'Z'; only the WITH_LOCAL_TIMEZONE formatter appends 'Z'.
+  -- The source column is TIMESTAMPTZ, so an instant is also the honest type.
+  created_at                 TIMESTAMP_LTZ(3),
+  updated_at                 TIMESTAMP_LTZ(3),
   PRIMARY KEY (order_id) NOT ENFORCED
 ) WITH (
   'connector'                     = 'kafka',
@@ -98,7 +110,8 @@ CREATE TABLE IF NOT EXISTS default_catalog.default_database.kafka_orders (
   'properties.group.id'           = 'aether-flink-orders',
   'scan.startup.mode'             = 'earliest-offset',
   'format'                        = 'debezium-json',
-  'debezium-json.schema-include'  = 'true'
+  'debezium-json.schema-include'  = 'true',
+  'debezium-json.timestamp-format.standard' = 'ISO-8601'
 );
 
 -- ---------------------------------------------------------------------------
@@ -111,8 +124,8 @@ CREATE TABLE IF NOT EXISTS aether_catalog.ecommerce.orders (
   order_status               STRING,
   currency                   STRING,
   total_amount               DECIMAL(12, 2),
-  created_at                 TIMESTAMP(3),
-  updated_at                 TIMESTAMP(3),
+  created_at                 TIMESTAMP_LTZ(3),
+  updated_at                 TIMESTAMP_LTZ(3),
   PRIMARY KEY (order_id) NOT ENFORCED
 ) WITH (
   'upsert-enabled' = 'true'

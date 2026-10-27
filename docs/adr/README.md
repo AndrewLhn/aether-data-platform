@@ -6,5 +6,6 @@ Architecture Decision Records (ADRs) capture decisions that are costly to redisc
 |---|---|---|
 | [001](ADR-001-kafka-event-backbone.md) | Use Apache Kafka as the event backbone | Accepted |
 | [002](ADR-002-flink-stream-processing.md) | Use Apache Flink for stateful stream processing | Accepted |
-| [003](ADR-003-iceberg-lakehouse.md) | Use Apache Iceberg for lakehouse tables | Accepted |
+| [003](ADR-003-iceberg-lakehouse.md) | Use Apache Iceberg for lakehouse tables | Accepted (storage and catalog choices superseded by 005) |
 | [004](ADR-004-separate-data-and-control-planes.md) | Separate data and control planes | Accepted |
+| [005](ADR-005-object-store-and-iceberg-catalog.md) | Object store and Iceberg catalog for the lakehouse | Accepted |

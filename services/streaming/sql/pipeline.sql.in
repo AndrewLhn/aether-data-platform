@@ -1,0 +1,147 @@
+-- Aether streaming pipeline: Kafka (Debezium CDC) -> Iceberg.
+--
+-- Executed by Flink SQL Client. This file is a template: the placeholders
+-- below are substituted at container start by
+-- services/streaming/docker/aether-entrypoint.sh, which keeps credentials out
+-- of version control. Never write literal secrets into this file.
+--
+-- Placeholders: ${KAFKA_BOOTSTRAP_SERVERS}, ${S3_ENDPOINT_INTERNAL},
+--               ${S3_ACCESS_KEY_ID}, ${S3_SECRET_ACCESS_KEY}, ${S3_REGION},
+--               ${S3_WAREHOUSE_BUCKET}, ${POSTGRES_JDBC_URL},
+--               ${POSTGRES_USER}, ${POSTGRES_PASSWORD}
+
+-- ---------------------------------------------------------------------------
+-- Session configuration
+-- ---------------------------------------------------------------------------
+SET 'execution.runtime-mode' = 'streaming';
+
+-- Iceberg commits a snapshot on checkpoint. Without checkpointing the writer
+-- buffers forever and nothing becomes visible downstream, so the interval is
+-- set here as well as in FLINK_PROPERTIES: `sql-client -f` is a new session and
+-- does not inherit cluster configuration for execution options.
+SET 'execution.checkpointing.interval' = '30s';
+SET 'execution.checkpointing.mode' = 'EXACTLY_ONCE';
+
+-- Debezium emits io.debezium.time.ZonedTimestamp as RFC 3339, e.g.
+-- 2026-10-26T19:27:53.701115Z. The JSON format defaults to
+-- timestamp-format.standard=SQL, whose formatter is
+-- ISO_LOCAL_DATE + ' ' + time, so it rejects the 'T' separator outright:
+-- "Text '...' could not be parsed at index 10". Index 10 is the 'T'.
+-- ISO-8601 is required, and see the TIMESTAMP_LTZ note on the source table for
+-- why ISO-8601 alone is still not enough.
+
+-- Equality deletes, which `upsert-enabled` relies on, require table format
+-- version 2. Stated explicitly so the contract does not depend on the default
+-- of whichever Iceberg version happens to be on the classpath.
+SET 'write.format-version' = '2';
+
+-- ---------------------------------------------------------------------------
+-- Iceberg catalog
+-- ---------------------------------------------------------------------------
+-- JdbcCatalog rather than HadoopCatalog.
+--
+-- Note that this choice is not what makes CREATE CATALOG work. iceberg-flink-runtime
+-- ships no org/apache/hadoop classes, and Iceberg builds a Hadoop Configuration while
+-- initialising any catalog, so hadoop-client-api and hadoop-client-runtime are
+-- required regardless of the type chosen. Picking a different catalog to dodge that
+-- ClassNotFoundException does not work; it fails identically.
+--
+-- JdbcCatalog is chosen on its merits. It keeps table metadata in PostgreSQL, which
+-- this stack already runs, and it commits in a database transaction. HadoopCatalog
+-- commits by renaming a version-hint file, and on an object store a rename is neither
+-- atomic nor cheap, so concurrent writers can lose commits.
+--
+-- The trade-off is that the lakehouse catalog depends on the transactional database.
+-- Acceptable for a single-node local stack; a REST catalog is the production-shaped
+-- successor and can be adopted without touching the pipeline.
+CREATE CATALOG aether_catalog WITH (
+  'type'                 = 'iceberg',
+  'catalog-impl'         = 'org.apache.iceberg.jdbc.JdbcCatalog',
+  'uri'                  = '${POSTGRES_JDBC_URL}',
+  'jdbc.user'            = '${POSTGRES_USER}',
+  'jdbc.password'        = '${POSTGRES_PASSWORD}',
+  'warehouse'            = 's3://${S3_WAREHOUSE_BUCKET}/warehouse',
+  'io-impl'              = 'org.apache.iceberg.aws.s3.S3FileIO',
+  's3.endpoint'          = '${S3_ENDPOINT_INTERNAL}',
+  's3.access-key-id'     = '${S3_ACCESS_KEY_ID}',
+  's3.secret-access-key' = '${S3_SECRET_ACCESS_KEY}',
+  's3.path-style-access' = 'true',
+  'client.region'        = '${S3_REGION}'
+);
+
+CREATE DATABASE IF NOT EXISTS aether_catalog.ecommerce;
+
+-- ---------------------------------------------------------------------------
+-- Source: Debezium change events for public.orders
+--
+-- debezium-json turns the CDC envelope into a changelog stream
+-- (+I / -U / +U / -D), which is what makes the sink able to apply updates and
+-- deletes rather than only appending. The connector is configured with
+-- tombstones.on.delete=false, so no null-valued records reach this table.
+--
+-- schema-include is load-bearing, not cosmetic. Kafka Connect runs with
+-- VALUE_CONVERTER_SCHEMAS_ENABLE=true, so every message is wrapped as
+-- {"schema":{...},"payload":{...}}. The format option defaults to false, which
+-- makes the deserializer look for before/after/op at the JSON root. They are not
+-- there, JsonToRowDataConverters.convertField returns null for a missing field
+-- rather than failing, and DebeziumJsonDeserializationSchema:152 then throws a
+-- NullPointerException on payload.getField(2).toString() — reported as
+-- "Corrupt Debezium JSON message" with the whole message echoed, which reads
+-- like bad data rather than a format option that was never set.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS default_catalog.default_database.kafka_orders (
+  order_id                   BIGINT,
+  customer_id                BIGINT,
+  external_order_reference   STRING,
+  order_status               STRING,
+  currency                   STRING,
+  total_amount               DECIMAL(12, 2),
+  -- TIMESTAMP_LTZ, not TIMESTAMP. With timestamp-format.standard=ISO-8601 the
+  -- formatter for TIMESTAMP is ISO_LOCAL_DATE_TIME, which accepts the 'T' but
+  -- not the trailing 'Z'; only the WITH_LOCAL_TIMEZONE formatter appends 'Z'.
+  -- The source column is TIMESTAMPTZ, so an instant is also the honest type.
+  created_at                 TIMESTAMP_LTZ(3),
+  updated_at                 TIMESTAMP_LTZ(3),
+  PRIMARY KEY (order_id) NOT ENFORCED
+) WITH (
+  'connector'                     = 'kafka',
+  'topic'                         = 'aether.public.orders',
+  'properties.bootstrap.servers'  = '${KAFKA_BOOTSTRAP_SERVERS}',
+  'properties.group.id'           = 'aether-flink-orders',
+  'scan.startup.mode'             = 'earliest-offset',
+  'format'                        = 'debezium-json',
+  'debezium-json.schema-include'  = 'true',
+  'debezium-json.timestamp-format.standard' = 'ISO-8601'
+);
+
+-- ---------------------------------------------------------------------------
+-- Sink: Iceberg table keyed by order_id
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS aether_catalog.ecommerce.orders (
+  order_id                   BIGINT,
+  customer_id                BIGINT,
+  external_order_reference   STRING,
+  order_status               STRING,
+  currency                   STRING,
+  total_amount               DECIMAL(12, 2),
+  created_at                 TIMESTAMP_LTZ(3),
+  updated_at                 TIMESTAMP_LTZ(3),
+  PRIMARY KEY (order_id) NOT ENFORCED
+) WITH (
+  'upsert-enabled' = 'true'
+);
+
+-- ---------------------------------------------------------------------------
+-- Continuous write
+-- ---------------------------------------------------------------------------
+INSERT INTO aether_catalog.ecommerce.orders
+SELECT
+  order_id,
+  customer_id,
+  external_order_reference,
+  order_status,
+  currency,
+  total_amount,
+  created_at,
+  updated_at
+FROM default_catalog.default_database.kafka_orders;

@@ -14,7 +14,7 @@ flowchart LR
     CDC --> K[(Kafka)]
     API --> K
     K --> STREAM[Flink streaming jobs]
-    STREAM --> LAKE[(Iceberg lakehouse<br/>MinIO / S3)]
+    STREAM --> LAKE[(Iceberg lakehouse<br/>S3-compatible object store)]
     LAKE --> QUERY[Trino]
     QUERY --> CONSUMERS[Analysts, finance, operations]
     CONTROL[Recovery Engine] -. governs & observes .-> CDC
@@ -31,7 +31,7 @@ flowchart LR
 | API ingestion | Fetches external data using cursors/idempotency keys and emits the common event envelope | CDC semantics for PostgreSQL |
 | Kafka | Durable, partitioned event transport and replayable retention window | Global ordering or business deduplication |
 | Flink | Stateful validation, enrichment, deduplication, event-time handling, and checkpointed processing | Long-term raw archival or operator policy |
-| Iceberg + MinIO/S3 | Versioned durable tables, snapshots, schema evolution, time travel, and object storage | Low-latency operational source of truth |
+| Iceberg + S3-compatible object store | Versioned durable tables, snapshots, schema evolution, time travel, and object storage | Low-latency operational source of truth |
 | Trino + dbt | Query serving, modeled data products, and data tests | Streaming recovery |
 | Recovery Engine | Replay workflow, incident/audit history, reconciliation orchestration, and control-plane policy | Inline transformation or a hard dependency on the data path |
 
@@ -42,9 +42,9 @@ The data plane carries records and produces analytical tables:
 1. **Ingestion**: PostgreSQL commits a transaction. Debezium reads the WAL and emits a change event. API adapters emit equivalent envelopes. All events are routed to Kafka using a **stable business key** (e.g., `order_id`) to ensure partition-level ordering.
 2. **Contract Validation**: Flink consumes events and validates them against a **Schema Registry** (e.g., Confluent or Apicurio). Events violating the contract are routed to a **Dead Letter Queue (DLQ)** to prevent pipeline stalls.
 3. **Stateful Processing**: Flink applies windowed aggregations and joins using **RocksDB state backend**. It handles late arrivals via a defined **Watermark strategy** (bounded-out-of-orderness), routing extremely late events to a side-output for reconciliation.
-4. **Atomic Sink**: The Flink Iceberg Sink implements a **Two-Phase Commit (2PC)** protocol. 
+4. **Atomic Sink**: The Flink Iceberg Sink implements a **Two-Phase Commit (2PC)** protocol.
     - *Pre-commit*: Flink writes data files to S3 during the checkpoint interval.
-    - *Commit*: Only upon successful Flink checkpoint completion does the sink commit a new snapshot to the Iceberg Catalog. 
+    - *Commit*: Only upon successful Flink checkpoint completion does the sink commit a new snapshot to the Iceberg Catalog.
     - *Result*: Trino readers see only atomically committed snapshots, ensuring no partial data from failed jobs is ever visible.
 5. **Analytical Layer**: dbt transforms curated Iceberg tables into governed marts; Trino exposes these via a high-performance SQL interface.
 
@@ -53,6 +53,7 @@ The data plane carries records and produces analytical tables:
 The Recovery Engine is a standalone service that manages the "reliability lifecycle." It uses its own metadata store (PostgreSQL) to track the state of the data plane without being in the critical path of event processing.
 
 ### Internal Architecture
+
 - **Audit Store**: Records every operator command, replay request, and incident.
 - **Observability Bridge**: Polls Flink JobManager for checkpoint IDs and Kafka for consumer group offsets.
 - **Replay Orchestrator**: Interfaces with Flink's REST API to trigger bounded replay jobs (via Savepoints or specific offset ranges).
@@ -76,6 +77,7 @@ sequenceDiagram
 ## Event and lineage contract
 
 Every data-plane event must adhere to a strict envelope:
+
 - `event_id`: UUID or deterministic hash for deduplication.
 - `event_type` and `schema_version`: For contract routing and evolution.
 - `occurred_at` (Event Time) and `ingested_at` (Processing Time).

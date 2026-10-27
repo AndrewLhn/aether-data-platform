@@ -13,6 +13,7 @@ The initial scope is a learning and portfolio environment, not a production serv
 **Goal:** Make completed orders, payment outcomes, and gross merchandise value available to analytics with predictable latency and guaranteed lineage.
 
 ### Workflow
+
 1. An application transaction creates or updates an order and its payment status in PostgreSQL.
 2. Debezium captures the change from the WAL (Write-Ahead Log) and emits a versioned event to a Kafka topic.
 3. Flink consumes the stream, applying:
@@ -23,11 +24,13 @@ The initial scope is a learning and portfolio environment, not a production serv
 5. Trino and dbt expose governed analytical models over the Iceberg snapshots.
 
 ### Technical Specifications & Guarantees
+
 - **Delivery Semantics:** End-to-end *at-least-once* by default, upgrading to *exactly-once* for financial metrics via Flink's Two-Phase Commit (2PC) sink to Iceberg.
 - **Latency Target:** Event-to-Lakehouse latency $< 5$ minutes (NFR-001).
 - **Lineage:** Every record in Iceberg must carry metadata: `source_ts`, `kafka_offset`, `flink_checkpoint_id`, and `event_version`.
 
 ### Failure Modes & Edge Cases
+
 - **Late Arrivals:** Events arriving after the watermark boundary are routed to a "late-events" side-output for manual reconciliation (UC-04).
 - **Schema Mismatch:** Events failing validation are sent to a Dead Letter Queue (DLQ) to prevent pipeline stalls.
 
@@ -38,17 +41,20 @@ The initial scope is a learning and portfolio environment, not a production serv
 **Goal:** Recover from an unexpected Flink task failure without losing or double-counting business facts.
 
 ### Workflow
+
 1. A Flink task fails (e.g., OOM, Node failure).
 2. Flink restores state (window contents, offsets) and source positions from the last successful checkpoint in the distributed storage.
 3. The Iceberg sink leverages its commit protocol: only data associated with a *completed* Flink checkpoint is committed as a new snapshot in Iceberg.
 4. The Recovery Engine observes the failure via Flink's JobManager API and triggers a reconciliation check for the window covered by the failed checkpoint.
 
 ### Technical Specifications & Guarantees
+
 - **Consistency:** No partial checkpoints are visible to Trino queries.
 - **Recovery Time Objective (RTO):** Job restart and state recovery $< 10$ minutes.
 - **State Backend:** RocksDB for incremental checkpoints to handle large state sizes.
 
 ### Failure Modes & Edge Cases
+
 - **Checkpoint Corruption:** If the last checkpoint is corrupted, the system rolls back to the previous valid checkpoint, triggering a re-process of the data range (idempotency required).
 
 ---
@@ -58,6 +64,7 @@ The initial scope is a learning and portfolio environment, not a production serv
 **Goal:** Recompute a derived dataset after a defect or business-rule change without disturbing unrelated data.
 
 ### Workflow
+
 1. An operator defines a **Replay Scope**: `(source_topic, start_offset/timestamp, end_offset/timestamp, target_table, transformation_version)`.
 2. The Recovery Engine creates an immutable `ReplayJob` record and validates that the target table supports versioning.
 3. The replay executes into a **Shadow Table** (cloned Iceberg table) to avoid mutating production data.
@@ -66,10 +73,12 @@ The initial scope is a learning and portfolio environment, not a production serv
 6. Upon approval, a metadata swap or `REPLACE` operation promotes the corrected snapshot to production.
 
 ### Technical Specifications & Guarantees
+
 - **Isolation:** Zero impact on the real-time data plane during replay.
 - **Auditability:** Every replay is linked to a Jira/Ticket ID and an operator signature.
 
 ### Failure Modes & Edge Cases
+
 - **Resource Contention:** Replay jobs are assigned lower priority/resources to prevent starving the real-time pipeline.
 
 ---
@@ -79,6 +88,7 @@ The initial scope is a learning and portfolio environment, not a production serv
 **Goal:** Find and fix divergences caused by connector downtime, retention pressure, or malformed events.
 
 ### Workflow
+
 1. **Scheduled Audit:** The Recovery Engine performs a "lightweight" reconciliation:
     - Compares record counts between PostgreSQL (source) and Iceberg (sink) for a specific time bucket.
     - Validates watermark continuity in Kafka.
@@ -89,6 +99,7 @@ The initial scope is a learning and portfolio environment, not a production serv
     - `IGNORE`: Accept the gap as a known loss (logged as an exception).
 
 ### Technical Specifications & Guarantees
+
 - **Optimization:** Uses Trino's distributed compute to perform counts and checksums over Iceberg, minimizing data movement.
 - **Coverage:** Ensures 100% of committed source transactions are accounted for in the lakehouse.
 
@@ -99,6 +110,7 @@ The initial scope is a learning and portfolio environment, not a production serv
 **Goal:** Allow producer evolution while protecting existing consumers and historical datasets.
 
 ### Workflow
+
 1. **Proposal:** A producer proposes a schema change (e.g., adding `discount_code` to `orders`).
 2. **Compatibility Check:** A CI gate checks the new schema against the Schema Registry using **Backward Compatibility** rules (new fields must be optional).
 3. **Version Tagging:** Every Kafka message is tagged with a `schema_id`.
@@ -108,6 +120,7 @@ The initial scope is a learning and portfolio environment, not a production serv
 5. **Migration:** Historical data is either left as-is (handled by dbt's `COALESCE`) or updated via a targeted replay (UC-03).
 
 ### Technical Specifications & Guarantees
+
 - **Registry:** Centralized schema management (e.g., Confluent Schema Registry or similar).
 - **Breaking Changes:** Any change violating backward compatibility requires a major version bump and a new Kafka topic.
 

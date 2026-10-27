@@ -43,3 +43,20 @@ infra/docker/volumes/
 *.pem
 *.key
 *.crt
+
+# Downloaded Flink libraries (resolved by scripts/download-flink-libs.sh
+# from infra/docker/flink/libs.lock). Digests and placeholders are committed,
+# binaries are not. The `/*` form is required: git cannot re-include a file
+# whose parent directory is excluded.
+infra/docker/flink/lib/*
+!infra/docker/flink/lib/.gitkeep
+!infra/docker/flink/lib/README.md
+infra/docker/flink/plugins/
+
+# Working notes that must never be committed. A scratch file in the repository
+# root is invisible to `git status` only if it is ignored, and ignoring it in
+# .git/info/exclude does not travel with the clone.
+DIAGNOSIS.md
+NOTES.local.md
+*.local.md
+scratch/

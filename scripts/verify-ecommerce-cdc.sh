@@ -59,15 +59,22 @@ connector_is_running() {
 
 wait_for "Debezium connector" connector_is_running
 
+# The connector's topic-creation policy makes this a single-partition topic, so
+# partition 0 is the only one. Naming it is required rather than cosmetic: Kafka
+# 4.x rejects --offset without --partition with "The partition is required when
+# offset is specified.", the consumer prints its usage and exits having read
+# nothing, which looks like a missing CDC record rather than a bad invocation.
+# --formatter-property replaces --property, deprecated and scheduled for removal.
 "${compose[@]}" exec -T kafka \
   /opt/kafka/bin/kafka-console-consumer.sh \
   --bootstrap-server kafka:19092 \
   --topic "${topic}" \
+  --partition 0 \
   --offset latest \
   --max-messages 1 \
   --timeout-ms 30000 \
-  --property print.key=true \
-  --property key.separator=' | ' >"${consumer_output}" 2>&1 &
+  --formatter-property print.key=true \
+  --formatter-property key.separator=' | ' >"${consumer_output}" 2>&1 &
 consumer_pid=$!
 
 sleep 2

@@ -15,6 +15,7 @@
   "table.include.list": "public.customers,public.orders,public.payments,public.inventory",
   "snapshot.mode": "initial",
   "tombstones.on.delete": "false",
+  "decimal.handling.mode": "string",
   "schema.history.internal.kafka.bootstrap.servers": "kafka:19092",
   "schema.history.internal.kafka.topic": "aether.schema-history",
   "topic.creation.default.replication.factor": "1",

@@ -1,0 +1,43 @@
+# Pinned Flink libraries for the Aether local stack.
+#
+# Format: <SHA-512>  <relative target path under infra/docker/flink>  <download URL>
+#
+# Every entry is verified before it is used, so a tampered or truncated
+# download fails the build instead of silently producing a broken image.
+#
+# Hashes for the two Iceberg artifacts are the .sha512 files published by the
+# Apache Iceberg release process on Maven Central. The Kafka connector hash was
+# computed from the published artifact; flink-sql-connector-kafka is distributed
+# without a .sha512 sidecar file.
+#
+# NOTE: JARs are deliberately NOT committed to git. Binary blobs in history are
+# irreversible, bloat every clone, and cannot be reviewed or bumped by tooling.
+# Run `make libs` (or scripts/download-flink-libs.sh) instead.
+#
+# Java baseline of the current set, measured from bytecode rather than taken
+# from a release note: iceberg-flink-runtime-1.20 needs Java 17,
+# iceberg-aws-bundle needs 11, everything else needs 8. The base image in
+# services/streaming/Dockerfile must therefore be a java17 variant or newer.
+# `make verify-java` re-measures this and fails if the two drift apart.
+#
+# postgresql is the JDBC driver for the Iceberg catalog.
+#
+# hadoop-client-api and hadoop-client-runtime are required by Iceberg itself,
+# not by a particular catalog type: the runtime jar contains no
+# org/apache/hadoop classes at all, and catalog initialisation constructs a
+# Hadoop Configuration. This is the pairing apache/iceberg uses in
+# docker/iceberg-flink-quickstart, at the same 3.4.2 version. api carries the
+# unrelocated public classes, runtime carries their shaded implementations;
+# neither works without the other.
+#
+# Flink's own S3 filesystem plugin ships inside the image under /opt/flink/opt
+# and is enabled by the image build, so it is not listed here. The RocksDB state
+# backend is not there: as of Flink 1.20 it is bundled inside flink-dist and
+# needs no plugin activation.
+
+114c42c9200794269e2decc2b8f4c6865924bb08b78e312c7c569ad9ec89947a5489b4404b99735911fe88d29e283854c41bb0cbda03d85d88a3fc6f72ba0879  lib/iceberg-flink-runtime-1.20-1.12.0.jar  https://repo1.maven.org/maven2/org/apache/iceberg/iceberg-flink-runtime-1.20/1.12.0/iceberg-flink-runtime-1.20-1.12.0.jar
+b01456f80142c8837004e31329a0f40db8a9d44917a4a694cb7d8d6d3a68cb20c61e6f7788fa1bdcb95c0edf724322b49667d6f9ef60fc9cc46da5c24ce5c7de  lib/iceberg-aws-bundle-1.12.0.jar  https://repo1.maven.org/maven2/org/apache/iceberg/iceberg-aws-bundle/1.12.0/iceberg-aws-bundle-1.12.0.jar
+b744f0f3c418a45cf23ac72d477f5f8ee73f8f96a5b733b21a953a0207facd52c5495383eaad2416dbffc17e9fa5b53b3cc49e70c3cb7a2ead38a7ecac0211df  lib/flink-sql-connector-kafka-3.4.0-1.20.jar  https://repo1.maven.org/maven2/org/apache/flink/flink-sql-connector-kafka/3.4.0-1.20/flink-sql-connector-kafka-3.4.0-1.20.jar
+2a7c94c3f86f7ad6cfa16a964fe79dec8b122449679c8bbdb18f7052593349c2d11dd07992034de88d6effd840e2edf5ea8542e947de19905c75677d0dd44abc  lib/postgresql-42.7.14.jar  https://repo1.maven.org/maven2/org/postgresql/postgresql/42.7.14/postgresql-42.7.14.jar
+7d99150a74eac17fe0b868ef67a13d3b75d117cb00d5f4905b161805af31279a81780db195cb514d33972087bf89ee21ab076446401000637eeeb9afb5e153a4  lib/hadoop-client-api-3.4.2.jar  https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-client-api/3.4.2/hadoop-client-api-3.4.2.jar
+60b148db4e051a6c3841ae727f1d50b8db80526ad91d62c0352613d9dcb514dc84cc3733e030e8672563cfec4952ae3462eef33000fb8b37f3c047ecba8e93a1  lib/hadoop-client-runtime-3.4.2.jar  https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-client-runtime/3.4.2/hadoop-client-runtime-3.4.2.jar

@@ -1,0 +1,44 @@
+# Local quality gates, mirroring what CI enforces.
+#
+# Install once:
+#   python3 -m pip install pre-commit
+#   pre-commit install
+#
+# Run manually against everything:
+#   pre-commit run --all-files
+#
+# `make lint` covers the project-specific checks and needs no extra tooling;
+# this file adds the generic hygiene checks and the secret scan on top.
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        # Two trailing spaces are a Markdown hard line break and are used
+        # deliberately in docs/architecture.md.
+        args: [--markdown-linebreaks]
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+      - id: check-added-large-files
+        args: ['--maxkb=1024']
+      - id: check-merge-conflict
+      - id: check-executables-have-shebangs
+      - id: check-shebang-scripts-are-executable
+      - id: detect-private-key
+      - id: mixed-line-ending
+        args: [--fix=lf]
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.21.2
+    hooks:
+      - id: gitleaks
+
+  - repo: local
+    hooks:
+      - id: aether-lint
+        name: aether make lint
+        entry: make lint
+        language: system
+        pass_filenames: false

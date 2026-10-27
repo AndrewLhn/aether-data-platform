@@ -1,0 +1,53 @@
+version: 2
+
+updates:
+  # Container images referenced in the compose file: postgres, kafka, debezium
+  # connect, seaweedfs, and the flink base image in services/streaming.
+  - package-ecosystem: docker
+    directory: /infra/docker
+    schedule:
+      interval: weekly
+    groups:
+      patch-and-minor:
+        update-types:
+          - patch
+          - minor
+    ignore:
+      # Flink is pinned to an exact patch version on purpose: savepoints and
+      # RocksDB state are version sensitive, and Iceberg 1.12 requires a Java 17
+      # runtime. A base image bump has to be a deliberate change, verified with
+      # `make verify-java`, not an automated one.
+      - dependency-name: flink
+      # Kafka 4.x tightened consumer argument validation, which broke a
+      # verification script once already. Minor bumps are worth a human look.
+      - dependency-name: apache/kafka
+        update-types:
+          - major
+          - minor
+
+  - package-ecosystem: docker
+    directory: /services/streaming
+    schedule:
+      interval: weekly
+    ignore:
+      - dependency-name: flink
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns:
+          - "*"
+
+  # Python dependencies are declared by .pre-commit-config.yaml, which Dependabot
+  # reads from the repository root.
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      python:
+        patterns:
+          - "*"

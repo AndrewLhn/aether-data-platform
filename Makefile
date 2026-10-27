@@ -33,6 +33,21 @@ python-deps:
 env:
 	@$(REPO_ROOT)/scripts/sync-env.py --env-file $(ENV_FILE) --template $(REPO_ROOT)/.env.example
 
+## check-author: fail if any commit on this branch is not authored by the git user
+.PHONY: check-author
+check-author:
+	@expected="$$(git config user.name) <$$(git config user.email)"; \
+	base="$$(git merge-base HEAD origin/main 2>/dev/null || git rev-parse main)"; \
+	wrong="$$(git log --format='%h %an <%ae>' "$$base"..HEAD | grep -vF "$$expected" || true)"; \
+	if [ -n "$$wrong" ]; then \
+	  echo "ERROR: commits not authored by $$expected:"; \
+	  echo "$$wrong" | sed 's/^/    /'; \
+	  echo "  Fix with: git rebase --exec 'git commit --amend --no-edit --reset-author' $$base"; \
+	  exit 1; \
+	fi; \
+	count="$$(git rev-list --count "$$base"..HEAD)"; \
+	echo "All $$count commit(s) are authored by $$expected."
+
 ## verify-libs: re-download every pinned artifact and re-check its digest
 .PHONY: verify-libs
 verify-libs:

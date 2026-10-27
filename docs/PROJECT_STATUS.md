@@ -1,6 +1,6 @@
-# Aether Data Platform — Project Status
+# Project status
 
-Working notes for anyone picking this up, human or agent. Kept honest on purpose: a status file that claims more than the repository does is worse than no status file, and this one was wrong once already.
+Working notes for whoever picks this up next. Kept honest on purpose: a status file that claims more than the repository does is worse than no status file, and this one was wrong once already — it described a PyFlink pipeline in a file that no longer existed.
 
 ## Current stage: Phase 1 — data plane, first slice running
 

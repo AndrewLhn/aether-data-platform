@@ -6,10 +6,27 @@
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
+PYTHON      ?= python3
 REPO_ROOT   := $(shell pwd)
 ENV_FILE    := $(REPO_ROOT)/.env
 COMPOSE_FILE := $(REPO_ROOT)/infra/docker/docker-compose.yml
 COMPOSE     := docker compose --env-file $(ENV_FILE) -f $(COMPOSE_FILE)
+
+## setup: install the development dependencies needed by make lint
+.PHONY: setup
+setup:
+	@$(PYTHON) -c 'import yaml' 2>/dev/null || { \
+	  echo "Installing development dependencies from requirements-dev.txt"; \
+	  $(PYTHON) -m pip install -q -r $(REPO_ROOT)/requirements-dev.txt; }
+	@echo "Development dependencies are present."
+
+# Internal guard, not listed in `make help`.
+.PHONY: python-deps
+python-deps:
+	@$(PYTHON) -c 'import yaml' 2>/dev/null || { \
+	  echo "ERROR: PyYAML is required by scripts/check-compose-portability.py."; \
+	  echo "       Run: make setup"; \
+	  exit 1; }
 
 ## env: create .env, or bring an existing one in line with .env.example
 .PHONY: env
@@ -103,7 +120,7 @@ sql-client: docker-ready | env
 
 ## lint: run the same static checks that CI runs
 .PHONY: lint
-lint:
+lint: python-deps
 	$(REPO_ROOT)/scripts/check-compose-portability.sh
 	$(REPO_ROOT)/scripts/check-flink-libs-lock.py
 	$(REPO_ROOT)/scripts/check-markdown.py

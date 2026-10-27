@@ -31,7 +31,8 @@ try:
     import yaml
 except ImportError:  # pragma: no cover - guidance beats a traceback
     sys.stderr.write(
-        "PyYAML is required: python3 -m pip install pyyaml\n"
+        "PyYAML is required to parse the compose file.\n"
+        "Install the development dependencies with: make setup\n"
     )
     sys.exit(2)
 

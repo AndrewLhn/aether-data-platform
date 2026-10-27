@@ -22,6 +22,7 @@ This is a single-machine development environment. It uses plaintext Kafka, unaut
 
 - Docker Desktop or Docker Engine with Docker Compose v2;
 - `make`, `python3`, and either `curl` or `wget`;
+- PyYAML for the local checks, installed by `make setup`;
 - ports `5432`, `8081`, `8083`, `8333`, and `9092` free on the host;
 - roughly 8 GB of Docker memory, and about 2.5 GB of disk for images on first pull;
 - about 165 MB of disk for the resolved Flink libraries.
@@ -31,6 +32,7 @@ This is a single-machine development environment. It uses plaintext Kafka, unaut
 From the repository root:
 
 ```bash
+make setup       # development dependencies for the local checks
 make libs        # download and SHA-512 verify the pinned Flink libraries
 make up          # start postgres, kafka, connect, seaweedfs, flink
 make ps          # confirm every service reports healthy

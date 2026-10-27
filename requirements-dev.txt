@@ -1,0 +1,7 @@
+# Development and CI dependencies.
+#
+# Install with `make setup`. Only what the local checks actually import:
+# scripts/check-compose-portability.py parses the compose file, and nothing else
+# in the repository needs a third-party package. The streaming pipeline is plain
+# SQL, so there is no runtime Python dependency to declare.
+pyyaml>=6.0,<7

@@ -92,6 +92,7 @@ Empty directories are intentional placeholders for the next phase. They describe
 ```bash
 git clone https://github.com/AndrewLhn/aether-data-platform.git
 cd aether-data-platform
+make setup         # development dependencies (PyYAML) for the local checks
 make libs          # download the pinned Flink libraries and verify their SHA-512
 make up            # postgres, kafka, connect, seaweedfs, flink
 make verify-cdc    # PostgreSQL -> Kafka, proven with a freshly inserted order

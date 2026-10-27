@@ -83,7 +83,7 @@ check-author:
 	  exit 1; \
 	fi; \
 	count="$$(git rev-list --count "$$base"..HEAD)"; \
-	echo "All $$count commit(s) are authored by $$expected."
+	echo "All $$count commit(s) on this branch are authored by $$expected"
 
 ## verify-libs: re-download every pinned artifact and re-check its digest
 .PHONY: verify-libs

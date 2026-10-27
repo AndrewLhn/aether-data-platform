@@ -134,12 +134,25 @@ def check_file(path: str, disabled: set[str], br_spaces: int = 2) -> list[str]:
             if rule("MD022") and previous.strip():
                 issues.append(f"{path}:{number} MD022 heading should be surrounded by blank lines")
 
-        # markdownlint treats a heading or another list item as a sufficient
-        # boundary for MD032; only a paragraph line directly above a list's first
-        # item is a violation. Requiring a literal blank line instead reports
-        # every list that follows a heading, which is most of them.
+        # markdownlint treats a heading, another list item, or the wrapped
+        # continuation of a list item as a sufficient boundary for MD032. Only a
+        # paragraph line directly above a list's first item is a violation.
+        #
+        # Both simplifications were tried and both were wrong. Requiring a literal
+        # blank line reported every list that follows a heading. Ignoring only
+        # list markers and headings then reported every list item that follows a
+        # wrapped item, because an indented continuation line looks like a
+        # paragraph. Detecting the continuation needs the list state carried
+        # across the previous line, hence prev_was_list.
+        # A line above a list item is an acceptable boundary if it is blank, a
+        # heading, another list item, or indented. Indentation covers both a
+        # wrapped continuation of the previous item and a nested list, which are
+        # the two shapes that a plain "was the previous line a marker" test gets
+        # wrong. Only an unindented paragraph line directly above a list's first
+        # item is reported.
         if rule("MD032") and LIST_RE.match(line) and previous.strip() \
-                and not LIST_RE.match(previous) and not HEADING_RE.match(previous):
+                and not LIST_RE.match(previous) and not HEADING_RE.match(previous) \
+                and not previous.startswith((" ", "\t")):
             issues.append(f"{path}:{number} MD032 list should be surrounded by blank lines")
 
         if rule("MD027") and re.match(r"^\s+>", line):

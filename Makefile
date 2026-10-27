@@ -175,7 +175,7 @@ sql-client: docker-ready | env
 lint: python-deps
 	$(PYTHON) $(REPO_ROOT)/scripts/check-compose-portability.py
 	$(PYTHON) $(REPO_ROOT)/scripts/check-flink-libs-lock.py
-	$(PYTHON) $(REPO_ROOT)/scripts/check-markdown.py
+	$(REPO_ROOT)/scripts/check-markdown.sh
 	@for f in $(REPO_ROOT)/scripts/*.sh; do bash -n "$$f" || exit 1; done
 	@sh -n $(REPO_ROOT)/infra/docker/postgres/init/01-create-debezium-user.sh
 	@node -e 'JSON.parse(require("fs").readFileSync("$(REPO_ROOT)/infra/docker/connectors/aether-postgres-cdc.json","utf8"))'

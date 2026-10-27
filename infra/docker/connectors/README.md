@@ -23,7 +23,7 @@ Flink's `debezium-json` format cannot turn that back into a `DECIMAL`. The field
 converts to null, which surfaces much later and much further away from the cause
 as
 
-```
+```text
 Failed to deserialize consumer record ...
 Caused by: java.lang.NullPointerException:
   Cannot invoke "Object.toString()" because the return value of

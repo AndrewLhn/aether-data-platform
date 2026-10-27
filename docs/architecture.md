@@ -42,9 +42,9 @@ The data plane carries records and produces analytical tables:
 1. **Ingestion**: PostgreSQL commits a transaction. Debezium reads the WAL and emits a change event. API adapters emit equivalent envelopes. All events are routed to Kafka using a **stable business key** (e.g., `order_id`) to ensure partition-level ordering.
 2. **Contract Validation**: Flink consumes events and validates them against a **Schema Registry** (e.g., Confluent or Apicurio). Events violating the contract are routed to a **Dead Letter Queue (DLQ)** to prevent pipeline stalls.
 3. **Stateful Processing**: Flink applies windowed aggregations and joins using **RocksDB state backend**. It handles late arrivals via a defined **Watermark strategy** (bounded-out-of-orderness), routing extremely late events to a side-output for reconciliation.
-4. **Atomic Sink**: The Flink Iceberg Sink implements a **Two-Phase Commit (2PC)** protocol. 
+4. **Atomic Sink**: The Flink Iceberg Sink implements a **Two-Phase Commit (2PC)** protocol.
     - *Pre-commit*: Flink writes data files to S3 during the checkpoint interval.
-    - *Commit*: Only upon successful Flink checkpoint completion does the sink commit a new snapshot to the Iceberg Catalog. 
+    - *Commit*: Only upon successful Flink checkpoint completion does the sink commit a new snapshot to the Iceberg Catalog.
     - *Result*: Trino readers see only atomically committed snapshots, ensuring no partial data from failed jobs is ever visible.
 5. **Analytical Layer**: dbt transforms curated Iceberg tables into governed marts; Trino exposes these via a high-performance SQL interface.
 
@@ -53,6 +53,7 @@ The data plane carries records and produces analytical tables:
 The Recovery Engine is a standalone service that manages the "reliability lifecycle." It uses its own metadata store (PostgreSQL) to track the state of the data plane without being in the critical path of event processing.
 
 ### Internal Architecture
+
 - **Audit Store**: Records every operator command, replay request, and incident.
 - **Observability Bridge**: Polls Flink JobManager for checkpoint IDs and Kafka for consumer group offsets.
 - **Replay Orchestrator**: Interfaces with Flink's REST API to trigger bounded replay jobs (via Savepoints or specific offset ranges).
